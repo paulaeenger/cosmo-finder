@@ -1,16 +1,48 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Compass, MapPin, Sparkles } from "lucide-react";
+import { Compass, MapPin, Sparkles, Check, AlertCircle } from "lucide-react";
+import { useState } from "react";
 
 type Props = {
-  onStart: () => void;
-  loading: boolean;
+  onRequestMotion: () => Promise<boolean>;
+  onRequestLocation: () => Promise<unknown>;
+  motionGranted: boolean;
+  locationGranted: boolean;
   geoError: string | null;
   orientationError: string | null;
+  loading: boolean;
 };
 
-export function StartScanner({ onStart, loading, geoError, orientationError }: Props) {
+/**
+ * Two-step permission flow optimized for iOS Safari.
+ *
+ * Why two steps: iOS requires motion permission to be requested from a
+ * fresh user gesture (button tap). If we await another permission first,
+ * iOS treats the motion request as no longer tied to user activation and
+ * silently denies it. So we ask for motion FIRST (the harder one), then
+ * location AFTER (the easier one) on a separate tap.
+ */
+export function StartScanner({
+  onRequestMotion,
+  onRequestLocation,
+  motionGranted,
+  locationGranted,
+  geoError,
+  orientationError,
+  loading,
+}: Props) {
+  const [step, setStep] = useState<"intro" | "motion-asked">("intro");
+
+  async function handleMotionTap() {
+    const ok = await onRequestMotion();
+    if (ok) setStep("motion-asked");
+  }
+
+  function handleLocationTap() {
+    onRequestLocation();
+  }
+
   return (
     <section className="relative">
       <div className="grain absolute inset-0 rounded-[28px]" />
@@ -29,45 +61,111 @@ export function StartScanner({ onStart, loading, geoError, orientationError }: P
           your phone&rsquo;s browser — wherever you happen to be standing.
         </p>
 
-        <motion.button
-          whileTap={{ scale: 0.98 }}
-          whileHover={{ y: -1 }}
-          onClick={onStart}
-          disabled={loading}
-          className="mt-7 flex w-full items-center justify-center gap-2 rounded-2xl bg-gold-400 px-5 py-4 font-medium text-ink-900 shadow-[0_8px_30px_rgba(232,196,116,0.25)] disabled:opacity-50"
-          style={{ background: "linear-gradient(180deg, #f0d28b 0%, #d4a84b 100%)" }}
-        >
-          <Sparkles className="h-4 w-4" />
-          {loading ? "Asking permissions…" : "Begin Sky Scanner"}
-        </motion.button>
+        {/* Two permission cards, one tap each */}
+        <div className="mt-7 space-y-3">
+          <PermissionCard
+            icon={<Compass className="h-4 w-4" />}
+            label="Motion & Compass"
+            description="So we know which way your phone is pointing"
+            granted={motionGranted}
+            error={orientationError}
+            onTap={handleMotionTap}
+            disabled={loading}
+            step={1}
+          />
 
-        <div className="mt-5 grid grid-cols-2 gap-3 text-xs">
-          <Hint icon={<MapPin className="h-3.5 w-3.5" />} label="Location" sub="So we know which stars are above you" />
-          <Hint icon={<Compass className="h-3.5 w-3.5" />} label="Motion" sub="So we know which way you're pointing" />
+          <PermissionCard
+            icon={<MapPin className="h-4 w-4" />}
+            label="Location"
+            description="So we know which stars are above you"
+            granted={locationGranted}
+            error={geoError}
+            onTap={handleLocationTap}
+            disabled={loading || (!motionGranted && step === "intro")}
+            step={2}
+          />
         </div>
 
-        {(geoError || orientationError) && (
-          <p className="mt-5 rounded-xl border border-rose-300/20 bg-rose-300/10 px-3 py-2.5 text-[13px] text-rose-100/90">
-            {geoError || orientationError}
-          </p>
+        {/* iOS hint that appears if motion fails */}
+        {orientationError && (
+          <div className="mt-5 rounded-xl border border-rose-300/20 bg-rose-300/10 px-4 py-3 text-[13px] text-rose-100/90">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-medium">Motion access blocked</p>
+                <p className="mt-1.5 text-rose-100/70 leading-snug">
+                  On iPhone, check{" "}
+                  <span className="font-mono text-rose-100">
+                    Settings → Safari → Advanced → Motion &amp; Orientation Access
+                  </span>{" "}
+                  is on, then close and reopen this page.
+                </p>
+              </div>
+            </div>
+          </div>
         )}
 
         <p className="mt-6 text-[11px] uppercase tracking-[0.25em] text-white/30 font-mono">
-          v1 · bright stars · planets · 110 messier objects · 88 constellations
+          v1.2 · bright stars · planets · iss · 110 messier objects · 88 constellations
         </p>
       </div>
     </section>
   );
 }
 
-function Hint({ icon, label, sub }: { icon: React.ReactNode; label: string; sub: string }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
-      <div className="flex items-center gap-1.5 text-white/80">
-        {icon}
-        <span className="text-[11px] tracking-widest uppercase font-mono">{label}</span>
+function PermissionCard({
+  icon,
+  label,
+  description,
+  granted,
+  error,
+  onTap,
+  disabled,
+  step,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  description: string;
+  granted: boolean;
+  error: string | null;
+  onTap: () => void;
+  disabled: boolean;
+  step: number;
+}) {
+  if (granted) {
+    return (
+      <div className="flex items-center gap-3 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3.5">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-400/20">
+          <Check className="h-4 w-4 text-emerald-300" />
+        </div>
+        <div className="flex-1">
+          <p className="text-[11px] uppercase tracking-[0.2em] text-emerald-300/80 font-mono">
+            Step {step} · Granted
+          </p>
+          <p className="text-sm text-white/85">{label}</p>
+        </div>
       </div>
-      <p className="mt-1 text-[12px] text-white/50 leading-snug">{sub}</p>
-    </div>
+    );
+  }
+
+  return (
+    <motion.button
+      whileTap={{ scale: 0.98 }}
+      onClick={onTap}
+      disabled={disabled}
+      className="group flex w-full items-center gap-3 rounded-2xl border border-gold-400/30 bg-gradient-to-br from-gold-400/15 to-gold-400/5 px-4 py-3.5 text-left disabled:opacity-40"
+    >
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gold-400/20 text-gold-400">
+        {icon}
+      </div>
+      <div className="flex-1">
+        <p className="text-[10px] uppercase tracking-[0.25em] text-gold-400 font-mono">
+          Step {step} · Tap to allow
+        </p>
+        <p className="mt-0.5 font-display text-lg leading-tight text-white">{label}</p>
+        <p className="mt-0.5 text-[12px] text-white/50">{description}</p>
+      </div>
+      <Sparkles className="h-4 w-4 text-gold-400/60 transition group-hover:text-gold-400" />
+    </motion.button>
   );
 }

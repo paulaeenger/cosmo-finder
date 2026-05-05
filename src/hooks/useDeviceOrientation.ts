@@ -65,7 +65,12 @@ export function useDeviceOrientation() {
       setGranted(true);
       return true;
     } catch (err) {
-      setError("Unable to access device orientation.");
+      // On iOS, requestPermission() throws when "Motion & Orientation Access"
+      // is disabled in Safari settings. The thrown error message varies, so
+      // we surface the actionable fix instead of the technical message.
+      setError(
+        "Motion access blocked by iOS. Open Settings → Safari → Advanced → Motion & Orientation Access and turn it on, then close and reopen this page."
+      );
       return false;
     }
   }, []);

@@ -66,11 +66,6 @@ export default function HomePage() {
     return sky.find((o) => o.name === tracked.name) ?? tracked;
   }, [tracked, sky]);
 
-  async function startScanner() {
-    await requestLocation();
-    await requestOrientation();
-  }
-
   const ready = position && granted;
 
   return (
@@ -78,7 +73,10 @@ export default function HomePage() {
       <div className="mx-auto max-w-md space-y-5">
         {!ready ? (
           <StartScanner
-            onStart={startScanner}
+            onRequestMotion={requestOrientation}
+            onRequestLocation={requestLocation}
+            motionGranted={granted}
+            locationGranted={!!position}
             loading={geoLoading}
             geoError={geoError}
             orientationError={orientationError}
