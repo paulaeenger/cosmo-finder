@@ -9,6 +9,7 @@ import { useDeviceOrientation } from "@/hooks/useDeviceOrientation";
 import { useSkyObjects } from "@/hooks/useSkyObjects";
 import { useSatellites } from "@/hooks/useSatellites";
 import { useSkyFilters, categoryFor, type FilterCategory } from "@/hooks/useSkyFilters";
+import { useSkyConditions } from "@/hooks/useSkyConditions";
 
 import {
   findClosestObject,
@@ -29,6 +30,7 @@ import { TonightHighlights } from "@/components/TonightHighlights";
 import { ObjectDetail } from "@/components/ObjectDetail";
 import { SatelliteAlert } from "@/components/SatelliteAlert";
 import { FilterBar } from "@/components/FilterBar";
+import { SkyConditionsBanner } from "@/components/SkyConditionsBanner";
 
 export default function HomePage() {
   const { position, error: geoError, loading: geoLoading, requestLocation } = useGeolocation();
@@ -37,16 +39,22 @@ export default function HomePage() {
   const { sky, now } = useSkyObjects(position, satellites);
   const { filters, toggle, reset, allOn } = useSkyFilters();
 
-  // Apply category filter once — every downstream consumer (SkyView,
-  // SkyCompass, SearchPanel, TonightHighlights, match) uses this filtered
-  // array, so a single filter change ripples cleanly through the whole UI.
+  // FIRST: filter by what's physically visible right now (sky conditions).
+  // Physics doesn't care about user preferences — daytime stars aren't
+  // visible no matter how much the user wants them to be.
+  const skyConditions = useSkyConditions(position, sky, now);
+  const physicallyVisibleSky = skyConditions?.visibleSky ?? sky;
+
+  // SECOND: apply the user's category preferences on top of physical visibility.
+  // The Filter chip counts also reflect what's physically visible so the user
+  // sees "Stars 0" during the day rather than "Stars 138" of invisible stars.
   const filteredSky = useMemo(
-    () => sky.filter((o) => filters[categoryFor(o.kind)]),
-    [sky, filters]
+    () => physicallyVisibleSky.filter((o) => filters[categoryFor(o.kind)]),
+    [physicallyVisibleSky, filters]
   );
 
-  // Counts per category for the filter chip badges. Computed against the
-  // unfiltered sky so the chip shows what's actually available to toggle on.
+  // Counts per category — based on physically visible sky, so chip counts
+  // are honest about what's actually available to toggle on right now.
   const counts = useMemo(() => {
     const c: Record<FilterCategory, number> = {
       stars: 0,
@@ -55,9 +63,9 @@ export default function HomePage() {
       constellations: 0,
       satellites: 0,
     };
-    for (const o of sky) c[categoryFor(o.kind)]++;
+    for (const o of physicallyVisibleSky) c[categoryFor(o.kind)]++;
     return c;
-  }, [sky]);
+  }, [physicallyVisibleSky]);
 
   const [tracked, setTracked] = useState<SkyObject | null>(null);
   const [detail, setDetail] = useState<SkyObject | null>(null);
@@ -115,6 +123,14 @@ export default function HomePage() {
         ) : (
           <>
             <Header position={position} now={now} pointing={pointing} />
+
+            {skyConditions && (
+              <SkyConditionsBanner
+                conditions={skyConditions.conditions}
+                nextDarkPhase={skyConditions.nextDarkPhase}
+                hiddenCount={skyConditions.hiddenAboveHorizon}
+              />
+            )}
 
             <SatelliteAlert sky={filteredSky} onPick={(o) => setDetail(o)} />
 
