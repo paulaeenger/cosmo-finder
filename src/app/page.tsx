@@ -8,6 +8,7 @@ import { useGeolocation } from "@/hooks/useGeolocation";
 import { useDeviceOrientation } from "@/hooks/useDeviceOrientation";
 import { useSkyObjects } from "@/hooks/useSkyObjects";
 import { useSatellites } from "@/hooks/useSatellites";
+import { useSkyFilters, categoryFor, type FilterCategory } from "@/hooks/useSkyFilters";
 
 import {
   findClosestObject,
@@ -27,12 +28,36 @@ import { SearchPanel } from "@/components/SearchPanel";
 import { TonightHighlights } from "@/components/TonightHighlights";
 import { ObjectDetail } from "@/components/ObjectDetail";
 import { SatelliteAlert } from "@/components/SatelliteAlert";
+import { FilterBar } from "@/components/FilterBar";
 
 export default function HomePage() {
   const { position, error: geoError, loading: geoLoading, requestLocation } = useGeolocation();
   const { orientation, granted, error: orientationError, requestOrientation } = useDeviceOrientation();
   const { satellites } = useSatellites();
   const { sky, now } = useSkyObjects(position, satellites);
+  const { filters, toggle, reset, allOn } = useSkyFilters();
+
+  // Apply category filter once — every downstream consumer (SkyView,
+  // SkyCompass, SearchPanel, TonightHighlights, match) uses this filtered
+  // array, so a single filter change ripples cleanly through the whole UI.
+  const filteredSky = useMemo(
+    () => sky.filter((o) => filters[categoryFor(o.kind)]),
+    [sky, filters]
+  );
+
+  // Counts per category for the filter chip badges. Computed against the
+  // unfiltered sky so the chip shows what's actually available to toggle on.
+  const counts = useMemo(() => {
+    const c: Record<FilterCategory, number> = {
+      stars: 0,
+      planets: 0,
+      "deep-sky": 0,
+      constellations: 0,
+      satellites: 0,
+    };
+    for (const o of sky) c[categoryFor(o.kind)]++;
+    return c;
+  }, [sky]);
 
   const [tracked, setTracked] = useState<SkyObject | null>(null);
   const [detail, setDetail] = useState<SkyObject | null>(null);
@@ -43,17 +68,21 @@ export default function HomePage() {
     [orientation.alpha, orientation.beta]
   );
 
-  // Match: closest object to phone direction. If user is tracking something,
-  // resolve to its live alt/az from the latest catalog (because satellites move).
+  // Match: closest object to phone direction, using the FILTERED sky so
+  // turning off "stars" makes the app identify planets/satellites instead.
+  // If user is tracking something explicit, resolve to its live alt/az from
+  // the unfiltered catalog (because satellites move and tracking should
+  // never be silently broken by a filter toggle).
   const match = useMemo<MatchResult | null>(() => {
-    if (!pointing || sky.length === 0) return null;
+    if (!pointing) return null;
     if (tracked) {
       const live = sky.find((o) => o.name === tracked.name) ?? tracked;
       const sep = angularDistance(pointing, { alt: live.alt, az: live.az });
       return { object: live, separation: sep };
     }
-    return findClosestObject(pointing, sky, { maxSeparation: 25 });
-  }, [pointing, sky, tracked]);
+    if (filteredSky.length === 0) return null;
+    return findClosestObject(pointing, filteredSky, { maxSeparation: 25 });
+  }, [pointing, sky, filteredSky, tracked]);
 
   // Auto-clear tracking if user gives up trying to find it
   useEffect(() => {
@@ -87,14 +116,22 @@ export default function HomePage() {
           <>
             <Header position={position} now={now} pointing={pointing} />
 
-            <SatelliteAlert sky={sky} onPick={(o) => setDetail(o)} />
+            <SatelliteAlert sky={filteredSky} onPick={(o) => setDetail(o)} />
+
+            <FilterBar
+              filters={filters}
+              counts={counts}
+              onToggle={toggle}
+              onReset={reset}
+              allOn={allOn}
+            />
 
             <ViewToggle mode={viewMode} onChange={setViewMode} />
 
             {viewMode === "panoramic" && position ? (
               <SkyView
                 pointing={pointing}
-                sky={sky}
+                sky={filteredSky}
                 trackedTarget={liveTracked}
                 onObjectTap={(o) => setDetail(o)}
                 observerLat={position.lat}
@@ -104,7 +141,7 @@ export default function HomePage() {
             ) : (
               <SkyCompass
                 pointing={pointing}
-                sky={sky}
+                sky={filteredSky}
                 trackedTarget={liveTracked}
                 onObjectTap={(o) => setDetail(o)}
               />
@@ -112,9 +149,11 @@ export default function HomePage() {
 
             <ObjectCard match={match} onOpenDetail={(o) => setDetail(o)} />
 
+            {/* Search uses unfiltered sky — if you type "Saturn" you should
+                find it even when the planets filter is off. */}
             <SearchPanel sky={sky} onPick={(o) => setDetail(o)} />
 
-            <TonightHighlights sky={sky} onPick={(o) => setDetail(o)} />
+            <TonightHighlights sky={filteredSky} onPick={(o) => setDetail(o)} />
 
             {tracked && (
               <motion.button
