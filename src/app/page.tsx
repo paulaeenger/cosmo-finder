@@ -33,6 +33,7 @@ import { SatelliteAlert } from "@/components/SatelliteAlert";
 import { FilterBar } from "@/components/FilterBar";
 import { SkyConditionsBanner } from "@/components/SkyConditionsBanner";
 import { TimeScrubber } from "@/components/TimeScrubber";
+import { OfflineIndicator } from "@/components/OfflineIndicator";
 
 export default function HomePage() {
   const { position, error: geoError, loading: geoLoading, requestLocation } = useGeolocation();
@@ -142,6 +143,8 @@ export default function HomePage() {
           <>
             <Header position={position} now={now} pointing={pointing} />
 
+            <OfflineIndicator />
+
             {skyConditions && (
               <SkyConditionsBanner
                 conditions={skyConditions.conditions}
@@ -169,8 +172,6 @@ export default function HomePage() {
               onToggle={toggle}
               onReset={reset}
               allOn={allOn}
-              equipment={equipment}
-              onEquipmentChange={setEquipment}
             />
 
             <ViewToggle mode={viewMode} onChange={setViewMode} />
