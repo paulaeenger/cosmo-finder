@@ -1,0 +1,322 @@
+[
+  {
+    "constellation": "Orion",
+    "lines": [
+      ["Betelgeuse", "Bellatrix"],
+      ["Bellatrix", "Mintaka"],
+      ["Mintaka", "Alnilam"],
+      ["Alnilam", "Alnitak"],
+      ["Alnitak", "Saiph"],
+      ["Saiph", "Rigel"],
+      ["Rigel", "Mintaka"],
+      ["Betelgeuse", "Alnitak"],
+      ["Bellatrix", "Heka"],
+      ["Heka", "Meissa"]
+    ]
+  },
+  {
+    "constellation": "Ursa Major",
+    "lines": [
+      ["Dubhe", "Merak"],
+      ["Merak", "Phecda"],
+      ["Phecda", "Megrez"],
+      ["Megrez", "Dubhe"],
+      ["Megrez", "Alioth"],
+      ["Alioth", "Mizar"],
+      ["Mizar", "Alkaid"]
+    ]
+  },
+  {
+    "constellation": "Ursa Minor",
+    "lines": [
+      ["Polaris", "Yildun"],
+      ["Yildun", "Epsilon UMi"],
+      ["Epsilon UMi", "Zeta UMi"],
+      ["Zeta UMi", "Kochab"],
+      ["Kochab", "Pherkad"],
+      ["Pherkad", "Eta UMi"],
+      ["Eta UMi", "Zeta UMi"]
+    ]
+  },
+  {
+    "constellation": "Cassiopeia",
+    "lines": [
+      ["Caph", "Schedar"],
+      ["Schedar", "Gamma Cas"],
+      ["Gamma Cas", "Ruchbah"],
+      ["Ruchbah", "Segin"]
+    ]
+  },
+  {
+    "constellation": "Cygnus",
+    "lines": [
+      ["Deneb", "Sadr"],
+      ["Sadr", "Albireo"],
+      ["Sadr", "Gienah"],
+      ["Sadr", "Fawaris"],
+      ["Gienah", "Aljanah"]
+    ]
+  },
+  {
+    "constellation": "Lyra",
+    "lines": [
+      ["Vega", "Sheliak"],
+      ["Sheliak", "Sulafat"],
+      ["Sulafat", "Vega"]
+    ]
+  },
+  {
+    "constellation": "Aquila",
+    "lines": [
+      ["Altair", "Tarazed"],
+      ["Altair", "Alshain"],
+      ["Tarazed", "Okab"],
+      ["Altair", "Theta Aquilae"]
+    ]
+  },
+  {
+    "constellation": "Leo",
+    "lines": [
+      ["Regulus", "Algieba"],
+      ["Algieba", "Adhafera"],
+      ["Adhafera", "Algenubi"],
+      ["Algenubi", "Rasalas"],
+      ["Rasalas", "Algieba"],
+      ["Regulus", "Chertan"],
+      ["Chertan", "Zosma"],
+      ["Zosma", "Denebola"],
+      ["Denebola", "Chertan"]
+    ]
+  },
+  {
+    "constellation": "Taurus",
+    "lines": [
+      ["Aldebaran", "Alnath"],
+      ["Aldebaran", "Ain"],
+      ["Aldebaran", "Hyadum I"],
+      ["Hyadum I", "Hyadum II"],
+      ["Alnath", "Tianguan"]
+    ]
+  },
+  {
+    "constellation": "Gemini",
+    "lines": [
+      ["Castor", "Pollux"],
+      ["Castor", "Mebsuta"],
+      ["Mebsuta", "Tejat"],
+      ["Tejat", "Propus"],
+      ["Pollux", "Wasat"],
+      ["Wasat", "Alhena"],
+      ["Wasat", "Mekbuda"]
+    ]
+  },
+  {
+    "constellation": "Canis Major",
+    "lines": [
+      ["Sirius", "Mirzam"],
+      ["Sirius", "Adhara"],
+      ["Adhara", "Wezen"],
+      ["Wezen", "Aludra"],
+      ["Wezen", "Furud"],
+      ["Sirius", "Furud"]
+    ]
+  },
+  {
+    "constellation": "Canis Minor",
+    "lines": [["Procyon", "Gomeisa"]]
+  },
+  {
+    "constellation": "Bootes",
+    "lines": [
+      ["Arcturus", "Muphrid"],
+      ["Arcturus", "Izar"],
+      ["Izar", "Seginus"],
+      ["Seginus", "Nekkar"],
+      ["Nekkar", "Asellus Primus"]
+    ]
+  },
+  {
+    "constellation": "Virgo",
+    "lines": [
+      ["Spica", "Heze"],
+      ["Heze", "Porrima"],
+      ["Porrima", "Auva"],
+      ["Auva", "Vindemiatrix"],
+      ["Vindemiatrix", "Zavijava"],
+      ["Spica", "Syrma"]
+    ]
+  },
+  {
+    "constellation": "Scorpius",
+    "lines": [
+      ["Antares", "Dschubba"],
+      ["Dschubba", "Acrab"],
+      ["Acrab", "Pi Scorpii"],
+      ["Antares", "Tau Scorpii"],
+      ["Tau Scorpii", "Epsilon Scorpii"],
+      ["Epsilon Scorpii", "Mu Scorpii"],
+      ["Mu Scorpii", "Zeta Scorpii"],
+      ["Zeta Scorpii", "Shaula"],
+      ["Shaula", "Lesath"],
+      ["Shaula", "Sargas"],
+      ["Sargas", "Iota Scorpii"]
+    ]
+  },
+  {
+    "constellation": "Sagittarius",
+    "lines": [
+      ["Kaus Australis", "Kaus Media"],
+      ["Kaus Media", "Kaus Borealis"],
+      ["Kaus Borealis", "Nunki"],
+      ["Nunki", "Tau Sagittarii"],
+      ["Tau Sagittarii", "Ascella"],
+      ["Ascella", "Kaus Australis"],
+      ["Nunki", "Albaldah"],
+      ["Albaldah", "Polis"]
+    ]
+  },
+  {
+    "constellation": "Capricornus",
+    "lines": [
+      ["Algedi", "Dabih"],
+      ["Dabih", "Deneb Algedi"],
+      ["Deneb Algedi", "Nashira"],
+      ["Nashira", "Dabih"]
+    ]
+  },
+  {
+    "constellation": "Aquarius",
+    "lines": [
+      ["Sadalmelik", "Sadalsuud"],
+      ["Sadalsuud", "Albali"],
+      ["Sadalmelik", "Sadachbia"],
+      ["Sadachbia", "Skat"]
+    ]
+  },
+  {
+    "constellation": "Pegasus",
+    "lines": [
+      ["Markab", "Scheat"],
+      ["Scheat", "Alpheratz"],
+      ["Alpheratz", "Algenib"],
+      ["Algenib", "Markab"],
+      ["Markab", "Homam"],
+      ["Homam", "Biham"],
+      ["Scheat", "Matar"],
+      ["Matar", "Sadalbari"],
+      ["Sadalbari", "Enif"]
+    ]
+  },
+  {
+    "constellation": "Andromeda",
+    "lines": [
+      ["Alpheratz", "Mirach"],
+      ["Mirach", "Almach"],
+      ["Mirach", "Nembus"]
+    ]
+  },
+  {
+    "constellation": "Perseus",
+    "lines": [
+      ["Mirfak", "Algol"],
+      ["Mirfak", "Atik"],
+      ["Atik", "Menkib"],
+      ["Mirfak", "Misam"]
+    ]
+  },
+  {
+    "constellation": "Auriga",
+    "lines": [
+      ["Capella", "Menkalinan"],
+      ["Menkalinan", "Alnath"],
+      ["Alnath", "Hassaleh"],
+      ["Hassaleh", "Capella"],
+      ["Capella", "Almaaz"]
+    ]
+  },
+  {
+    "constellation": "Hercules",
+    "lines": [
+      ["Kornephoros", "Sarin"],
+      ["Sarin", "Maasym"],
+      ["Maasym", "Cujam"],
+      ["Kornephoros", "Marsic"],
+      ["Marsic", "Ras Algethi"]
+    ]
+  },
+  {
+    "constellation": "Lyra",
+    "lines": [
+      ["Vega", "Sheliak"],
+      ["Sheliak", "Sulafat"],
+      ["Sulafat", "Vega"]
+    ]
+  },
+  {
+    "constellation": "Crux",
+    "lines": [
+      ["Acrux", "Gacrux"],
+      ["Mimosa", "Imai"]
+    ]
+  },
+  {
+    "constellation": "Centaurus",
+    "lines": [
+      ["Rigil Kentaurus", "Hadar"],
+      ["Hadar", "Menkent"]
+    ]
+  },
+  {
+    "constellation": "Ophiuchus",
+    "lines": [
+      ["Rasalhague", "Cebalrai"],
+      ["Cebalrai", "Sabik"],
+      ["Sabik", "Yed Prior"],
+      ["Yed Prior", "Yed Posterior"],
+      ["Yed Posterior", "Marfik"],
+      ["Marfik", "Rasalhague"],
+      ["Sabik", "Sinistra"]
+    ]
+  },
+  {
+    "constellation": "Corvus",
+    "lines": [
+      ["Algorab", "Gienah Corvi"],
+      ["Gienah Corvi", "Minkar"],
+      ["Minkar", "Kraz"],
+      ["Kraz", "Algorab"]
+    ]
+  },
+  {
+    "constellation": "Delphinus",
+    "lines": [
+      ["Sualocin", "Rotanev"]
+    ]
+  },
+  {
+    "constellation": "Aries",
+    "lines": [
+      ["Hamal", "Sheratan"],
+      ["Sheratan", "Mesarthim"]
+    ]
+  },
+  {
+    "constellation": "Cepheus",
+    "lines": [
+      ["Alderamin", "Alfirk"],
+      ["Alfirk", "Errai"],
+      ["Errai", "Zeta Cephei"]
+    ]
+  },
+  {
+    "constellation": "Draco",
+    "lines": [
+      ["Etamin", "Rastaban"],
+      ["Rastaban", "Grumium"],
+      ["Grumium", "Aldhibah"],
+      ["Aldhibah", "Edasich"],
+      ["Edasich", "Thuban"],
+      ["Thuban", "Giausar"]
+    ]
+  }
+]

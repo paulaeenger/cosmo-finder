@@ -14,6 +14,7 @@ import {
   type SatellitePosition,
 } from "./satellites";
 import brightStars from "../data/bright-stars.json";
+import extendedStars from "../data/extended-stars.json";
 import messier from "../data/messier.json";
 import constellations from "../data/constellations.json";
 
@@ -99,6 +100,26 @@ export function computeVisibleSky(
       constellation: s.constellation,
       distLy: s.distLy,
       description: `${s.bayer} — a star in ${s.constellation}.`,
+    });
+  }
+
+  // Extended stars (unnamed/lesser-known stars used for filling out
+  // constellation patterns and creating a denser visual sky)
+  for (const s of extendedStars as Array<{
+    name: string;
+    ra: number;
+    dec: number;
+    mag: number;
+    constellation: string;
+  }>) {
+    push({
+      name: s.name,
+      kind: "star",
+      ra: s.ra,
+      dec: s.dec,
+      mag: s.mag,
+      constellation: s.constellation,
+      description: `A star in ${s.constellation}.`,
     });
   }
 

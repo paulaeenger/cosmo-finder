@@ -21,6 +21,7 @@ import {
 
 import { StartScanner } from "@/components/StartScanner";
 import { SkyCompass } from "@/components/SkyCompass";
+import { SkyView } from "@/components/SkyView";
 import { ObjectCard } from "@/components/ObjectCard";
 import { SearchPanel } from "@/components/SearchPanel";
 import { TonightHighlights } from "@/components/TonightHighlights";
@@ -35,6 +36,7 @@ export default function HomePage() {
 
   const [tracked, setTracked] = useState<SkyObject | null>(null);
   const [detail, setDetail] = useState<SkyObject | null>(null);
+  const [viewMode, setViewMode] = useState<"panoramic" | "instrument">("panoramic");
 
   const pointing = useMemo(
     () => deviceToHorizontal(orientation.alpha, orientation.beta),
@@ -87,12 +89,26 @@ export default function HomePage() {
 
             <SatelliteAlert sky={sky} onPick={(o) => setDetail(o)} />
 
-            <SkyCompass
-              pointing={pointing}
-              sky={sky}
-              trackedTarget={liveTracked}
-              onObjectTap={(o) => setDetail(o)}
-            />
+            <ViewToggle mode={viewMode} onChange={setViewMode} />
+
+            {viewMode === "panoramic" && position ? (
+              <SkyView
+                pointing={pointing}
+                sky={sky}
+                trackedTarget={liveTracked}
+                onObjectTap={(o) => setDetail(o)}
+                observerLat={position.lat}
+                observerLon={position.lon}
+                now={now}
+              />
+            ) : (
+              <SkyCompass
+                pointing={pointing}
+                sky={sky}
+                trackedTarget={liveTracked}
+                onObjectTap={(o) => setDetail(o)}
+              />
+            )}
 
             <ObjectCard match={match} onOpenDetail={(o) => setDetail(o)} />
 
@@ -186,7 +202,60 @@ function shortName(name: string) {
 function Footer({ satCount }: { satCount: number }) {
   return (
     <p className="pt-2 text-center text-[10px] uppercase tracking-[0.3em] text-white/25 font-mono">
-      {satCount > 0 ? `tracking ${satCount} satellites · ` : ""}made for stargazers · v1.1
+      {satCount > 0 ? `tracking ${satCount} satellites · ` : ""}made for stargazers · v2.0
     </p>
+  );
+}
+
+function ViewToggle({
+  mode,
+  onChange,
+}: {
+  mode: "panoramic" | "instrument";
+  onChange: (m: "panoramic" | "instrument") => void;
+}) {
+  return (
+    <div className="flex gap-1 rounded-full border border-white/10 bg-white/[0.03] p-1">
+      <ToggleOption
+        active={mode === "panoramic"}
+        onClick={() => onChange("panoramic")}
+        label="Sky View"
+        sub="Panoramic"
+      />
+      <ToggleOption
+        active={mode === "instrument"}
+        onClick={() => onChange("instrument")}
+        label="Compass"
+        sub="Precision"
+      />
+    </div>
+  );
+}
+
+function ToggleOption({
+  active,
+  onClick,
+  label,
+  sub,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  sub: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-1 rounded-full px-3 py-2 text-center transition ${
+        active
+          ? "bg-gold-400/15 text-gold-400"
+          : "text-white/50 hover:text-white/80"
+      }`}
+    >
+      <p className="text-[12px] font-medium">{label}</p>
+      <p className="text-[9px] uppercase tracking-[0.2em] font-mono opacity-70">
+        {sub}
+      </p>
+    </button>
   );
 }

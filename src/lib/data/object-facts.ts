@@ -1,5 +1,13 @@
-// Rich, factual content for the detail page. Hand-curated rather than
-// AI-generated so we don't hallucinate specs.
+// Hand-curated content for the detail page. Written in a substantive,
+// informational register — closer to a planetarium guide or a Patrick
+// Moore astronomy book than a Buzzfeed listicle.
+//
+// Voice notes:
+//   - Declarative, factual, specific
+//   - Lead with what something IS, not with a rhetorical hook
+//   - "Significance" replaces the old "Fun Fact" — surfaces historical,
+//     scientific, or cultural importance rather than trivia
+//   - Numbers cited where they sharpen meaning, omitted where they don't
 
 export type ObjectFacts = {
   tagline: string;
@@ -7,418 +15,464 @@ export type ObjectFacts = {
   facts: { label: string; value: string }[];
   history?: string;
   viewing?: string;
+  /** Historical, scientific, or cultural importance. */
+  significance?: string;
+  /** Backward compatibility alias. Components should prefer significance. */
   funFact?: string;
 };
 
 export const PLANET_FACTS: Record<string, ObjectFacts> = {
   Mercury: {
-    tagline: "The smallest, fastest planet — closest to the Sun",
+    tagline: "The innermost planet of the solar system",
     overview:
-      "Mercury whips around the Sun every 88 days, moving so fast that ancient Greeks named it after their messenger god. It has almost no atmosphere, so its surface temperature swings from -180°C at night to 430°C in daylight — the most extreme range in the solar system.",
+      "Mercury orbits closer to the Sun than any other planet, completing one revolution every 88 Earth days. It has only a tenuous exosphere of atoms knocked from its surface by solar radiation, so heat is not retained between day and night. Surface temperatures swing from approximately 430°C on the sunlit side to -180°C in shadow — the largest diurnal range of any planet. Its surface, photographed in detail by NASA's MESSENGER mission, is heavily cratered and resembles the Moon.",
     facts: [
       { label: "Diameter", value: "4,879 km (38% of Earth)" },
       { label: "Mass", value: "0.055 Earth masses" },
-      { label: "Day length", value: "176 Earth days" },
-      { label: "Year length", value: "88 Earth days" },
-      { label: "Distance from Sun", value: "0.39 AU (58 million km)" },
+      { label: "Mean distance from Sun", value: "0.39 AU (57.9 million km)" },
+      { label: "Orbital period", value: "88 Earth days" },
+      { label: "Rotational period", value: "58.6 Earth days" },
+      { label: "Solar day length", value: "176 Earth days" },
+      { label: "Surface gravity", value: "3.7 m/s² (0.38 g)" },
       { label: "Moons", value: "None" },
-      { label: "Surface gravity", value: "3.7 m/s² (38% of Earth)" },
     ],
     viewing:
-      "Mercury never strays far from the Sun, so it's only visible for ~30 minutes after sunset or before sunrise, and never very high above the horizon. Look for it as a small, steady non-twinkling point.",
-    funFact:
-      "Mercury has ice. Despite being the closest planet to the Sun, permanently shadowed craters at its poles host frozen water deposits — confirmed by the MESSENGER mission in 2012.",
+      "Mercury is visible only briefly near the horizon at dusk or dawn, never appearing more than 28° from the Sun. Eastern elongations (evening apparitions) and western elongations (morning apparitions) occur three to four times each year and last about two weeks. Mercury appears as a steady, non-twinkling point of moderate brightness.",
+    significance:
+      "Permanently shadowed craters at Mercury's poles preserve water ice despite the planet's proximity to the Sun. The MESSENGER mission, which orbited Mercury from 2011 to 2015, confirmed deposits of frozen water and complex organic compounds at both poles, expanding the known range of environments where water can persist in the inner solar system.",
   },
+
   Venus: {
-    tagline: "The brightest planet — Earth's hellish twin",
+    tagline: "The second planet from the Sun",
     overview:
-      "Roughly the size and mass of Earth, Venus is wrapped in a thick CO₂ atmosphere with sulfuric acid clouds that reflect 76% of incoming sunlight. That's what makes it so brilliantly bright. Underneath, the surface is hot enough to melt lead — 465°C, hotter than Mercury's daytime side.",
+      "Venus is comparable to Earth in mass and diameter but the two planets evolved very differently. A dense atmosphere of carbon dioxide, ninety times the surface pressure of Earth's, drives a runaway greenhouse effect that holds the surface at 465°C — hotter than Mercury's daylit side. Sulfuric acid clouds reflect three-quarters of incoming sunlight, which is what makes Venus appear so bright in our sky. The Soviet Venera landers in the 1970s and 1980s remain the only spacecraft to have transmitted images from the surface; each survived less than two hours in the heat and pressure.",
     facts: [
       { label: "Diameter", value: "12,104 km (95% of Earth)" },
       { label: "Mass", value: "0.815 Earth masses" },
-      { label: "Day length", value: "243 Earth days (longer than its year!)" },
-      { label: "Year length", value: "225 Earth days" },
-      { label: "Distance from Sun", value: "0.72 AU (108 million km)" },
-      { label: "Atmosphere", value: "96.5% CO₂, with sulfuric acid clouds" },
-      { label: "Surface temperature", value: "465°C" },
+      { label: "Mean distance from Sun", value: "0.72 AU (108 million km)" },
+      { label: "Orbital period", value: "224.7 Earth days" },
+      { label: "Rotational period", value: "243 Earth days (retrograde)" },
+      { label: "Surface temperature", value: "465°C (uniform day and night)" },
+      { label: "Surface pressure", value: "92 bar" },
+      { label: "Atmosphere", value: "96.5% CO₂, 3.5% N₂" },
     ],
     viewing:
-      "Venus is the third-brightest object in our sky after the Sun and Moon. Look for it low in the west after sunset (the 'evening star') or low in the east before sunrise (the 'morning star'). In a small telescope you can watch it go through phases like the Moon.",
-    funFact:
-      "Venus rotates backwards. While almost every other planet spins west-to-east, Venus turns east-to-west — the Sun rises in the west there. The likely cause: an ancient massive impact.",
+      "Venus is the third-brightest object in the sky after the Sun and Moon, and is conspicuous low in the west after sunset (the 'evening star') or low in the east before sunrise (the 'morning star'). A small telescope reveals phases analogous to those of the Moon — Galileo's observation of these phases in 1610 was a pivotal proof that the planets orbit the Sun rather than the Earth.",
+    significance:
+      "Venus rotates retrograde — opposite to its orbital direction and to nearly every other body in the solar system. The most likely explanation is a major impact early in its history, though tidal interaction with its dense atmosphere may also have contributed. Its rotation is so slow that a Venusian solar day is shorter than its sidereal day, making it the only planet where the Sun rises in the west.",
   },
+
   Mars: {
-    tagline: "The Red Planet — humanity's next destination",
+    tagline: "The fourth planet from the Sun",
     overview:
-      "Mars is half the diameter of Earth and gets its rusty color from iron oxide dust covering the surface. It has the tallest volcano in the solar system (Olympus Mons, 22 km high) and a canyon system, Valles Marineris, that would stretch from New York to Los Angeles. Polar ice caps and seasonal CO₂ frost give Mars genuine seasons.",
+      "Mars has roughly half Earth's diameter and a tenth its mass. Its thin atmosphere — primarily carbon dioxide at less than one percent of Earth's surface pressure — supports seasonal CO₂ frost at the poles and global dust storms that occasionally envelop the entire planet. The reddish surface color comes from iron oxide. Mars hosts the largest volcano in the solar system, Olympus Mons (22 km tall, 600 km wide), and Valles Marineris, a canyon system 4,000 km long. Active rover missions have confirmed that liquid water once flowed across the surface.",
     facts: [
       { label: "Diameter", value: "6,779 km (53% of Earth)" },
       { label: "Mass", value: "0.107 Earth masses" },
-      { label: "Day length", value: "24h 37m" },
-      { label: "Year length", value: "687 Earth days" },
-      { label: "Distance from Sun", value: "1.52 AU (228 million km)" },
-      { label: "Moons", value: "2 (Phobos & Deimos)" },
-      { label: "Surface gravity", value: "3.7 m/s² (38% of Earth)" },
+      { label: "Mean distance from Sun", value: "1.52 AU (228 million km)" },
+      { label: "Orbital period", value: "687 Earth days" },
+      { label: "Rotational period", value: "24h 37m" },
+      { label: "Axial tilt", value: "25.2° (similar to Earth's)" },
+      { label: "Surface gravity", value: "3.7 m/s² (0.38 g)" },
+      { label: "Moons", value: "Phobos and Deimos" },
     ],
     viewing:
-      "Mars has a distinctive orange-red tint visible to the naked eye. It's brightest during 'opposition' (every ~26 months) when Earth passes between Mars and the Sun. In a telescope you can see polar caps and dark surface markings.",
-    funFact:
-      "Mars has had liquid water flowing across it as recently as a few million years ago, and active rovers — Curiosity and Perseverance — are searching for signs that microbial life once thrived there.",
+      "Mars is brightest during opposition, when Earth passes between Mars and the Sun, occurring approximately every 26 months. At opposition, Mars can be the brightest planet aside from Venus. Color is visibly orange-red even to the naked eye. Telescopic observation reveals polar ice caps and dark surface markings; Syrtis Major was the first surface feature ever recorded on another planet, by Christiaan Huygens in 1659.",
+    significance:
+      "Mars is the most thoroughly explored planet besides Earth. The Curiosity and Perseverance rovers have confirmed that the Gale and Jezero craters were once hospitable lake environments, and Perseverance is currently caching rock samples for a planned return-to-Earth mission. If life ever existed on Mars, the evidence is most likely preserved in the sediments these rovers are sampling.",
   },
+
   Jupiter: {
-    tagline: "The king of planets — a failed star",
+    tagline: "The largest planet in the solar system",
     overview:
-      "Jupiter is so massive that it's more than twice the mass of all other planets combined. If it had been about 80 times more massive, it would have ignited as a star. Its swirling cloud bands are made of ammonia and water ice, driven by 600 km/h winds. The Great Red Spot is a storm larger than Earth that has been raging for at least 350 years.",
+      "Jupiter contains more than twice the mass of all other planets combined. It is composed primarily of hydrogen and helium, with no defined surface — atmospheric pressure increases continuously with depth until hydrogen transitions to a metallic liquid state thousands of kilometers down. The visible cloud bands are driven by 600 km/h winds and powerful Coriolis forces from Jupiter's rapid 10-hour rotation. The Great Red Spot, a high-pressure storm larger than Earth, has been continuously observed since at least the 1830s.",
     facts: [
-      { label: "Diameter", value: "139,820 km (11× Earth)" },
+      { label: "Diameter", value: "139,820 km (11.2× Earth)" },
       { label: "Mass", value: "318 Earth masses" },
-      { label: "Day length", value: "9h 56m (fastest in solar system)" },
-      { label: "Year length", value: "11.86 Earth years" },
-      { label: "Distance from Sun", value: "5.20 AU (778 million km)" },
-      { label: "Known moons", value: "95 (Ganymede, Io, Europa, Callisto largest)" },
-      { label: "Composition", value: "90% hydrogen, 10% helium" },
+      { label: "Mean distance from Sun", value: "5.20 AU (778 million km)" },
+      { label: "Orbital period", value: "11.86 Earth years" },
+      { label: "Rotational period", value: "9h 56m (fastest in solar system)" },
+      { label: "Composition", value: "~90% hydrogen, ~10% helium" },
+      { label: "Confirmed moons", value: "95" },
+      { label: "Ring system", value: "Faint, primarily dust" },
     ],
     viewing:
-      "Jupiter is one of the brightest objects in the night sky. Even in cheap binoculars you can see its four largest moons (the Galilean moons) as tiny pinpricks alongside it — and they shift position from night to night.",
-    funFact:
-      "Jupiter's moon Europa hides a global ocean beneath its icy crust with twice the water of all Earth's oceans combined — and it's one of the most likely places in the solar system to find life.",
+      "Jupiter is among the brightest objects in the night sky and is unmistakable when above the horizon. Binoculars resolve the four Galilean moons — Io, Europa, Ganymede, and Callisto — as small points of light flanking the planet, with their positions visibly changing from night to night. A modest telescope reveals the equatorial cloud bands and, when oriented correctly, the Great Red Spot.",
+    significance:
+      "Jupiter's gravitational influence shapes the architecture of the solar system. It is large enough to perturb the orbits of comets and asteroids, and many planetary scientists argue that Jupiter has historically deflected impactors away from the inner planets, though the protective effect is contested. Beneath the icy crust of its moon Europa lies a global liquid-water ocean estimated to contain twice the volume of all Earth's oceans, making it among the most promising sites in the solar system to search for extant life.",
   },
+
   Saturn: {
-    tagline: "The jewel of the solar system",
+    tagline: "The sixth planet from the Sun",
     overview:
-      "Saturn's rings span 282,000 km but are only ~10 meters thick — a ratio comparable to a sheet of paper the size of a football field. They're made of countless ice and rock chunks, ranging from grains of sand to house-sized boulders. Saturn itself is so low-density (less than water) that it would float.",
+      "Saturn is the second-largest planet and the only one whose mean density (0.69 g/cm³) is less than that of water. Its ring system spans 282,000 km in width but is generally less than 100 meters thick — composed of countless particles of water ice and rock ranging from dust grains to boulders. The rings are believed to be young in geological terms, perhaps less than 100 million years old, and may be the debris of a disrupted moon. The Cassini spacecraft, in orbit from 2004 to 2017, transformed our understanding of the Saturnian system before plunging into the planet at the end of its mission.",
     facts: [
       { label: "Diameter", value: "116,460 km (9.4× Earth)" },
       { label: "Mass", value: "95 Earth masses" },
-      { label: "Day length", value: "10h 42m" },
-      { label: "Year length", value: "29.5 Earth years" },
-      { label: "Distance from Sun", value: "9.58 AU (1.43 billion km)" },
-      { label: "Known moons", value: "146 (most of any planet)" },
-      { label: "Ring span", value: "282,000 km wide" },
+      { label: "Mean distance from Sun", value: "9.58 AU (1.43 billion km)" },
+      { label: "Orbital period", value: "29.5 Earth years" },
+      { label: "Rotational period", value: "10h 42m" },
+      { label: "Ring span", value: "282,000 km wide, ~10–100 m thick" },
+      { label: "Confirmed moons", value: "146 (most of any planet)" },
+      { label: "Mean density", value: "0.69 g/cm³ (less than water)" },
     ],
     viewing:
-      "Saturn looks like a slightly dimmer Jupiter to the naked eye, but a small telescope reveals the rings — one of the most jaw-dropping sights in amateur astronomy. The ring tilt changes over years; they appear edge-on (invisible) every ~15 years.",
-    funFact:
-      "Saturn's moon Titan has lakes and rivers — but of liquid methane and ethane, not water. It's the only place besides Earth in our solar system with stable surface liquid.",
+      "Saturn appears to the naked eye as a steady, yellowish point similar in brightness to the brighter stars. Even a small telescope reveals the rings as a clearly separated ellipse around the planet — one of the most striking sights in amateur astronomy. The ring tilt varies over Saturn's 29.5-year orbit, appearing edge-on (and effectively invisible) approximately every 15 years.",
+    significance:
+      "Saturn's moon Titan is the only world besides Earth known to host stable surface liquids. Lakes and rivers of liquid methane and ethane cover Titan's polar regions, and a complex hydrocarbon weather cycle drives precipitation, erosion, and seasonal change. A second moon, Enceladus, vents plumes of water ice from a subsurface ocean, making it another leading candidate in the search for extraterrestrial life.",
   },
+
   Uranus: {
-    tagline: "The sideways ice giant",
+    tagline: "The seventh planet from the Sun",
     overview:
-      "Uranus rotates on its side — its axis is tilted 98° from vertical, likely the result of a massive collision in its early history. This means each pole spends 42 years in continuous sunlight, then 42 years in darkness. Its pale cyan color comes from methane in the upper atmosphere absorbing red light.",
+      "Uranus is an ice giant — primarily composed of water, methane, and ammonia ices surrounding a small rocky core, distinguishing it from the gas giants Jupiter and Saturn. Its axis is tilted 97.8° from vertical, meaning the planet rotates on its side; this likely results from a large impact early in its history. As a consequence, each pole experiences continuous sunlight for 42 years followed by 42 years of darkness. The pale cyan color is produced by methane in the upper atmosphere absorbing red wavelengths of sunlight.",
     facts: [
       { label: "Diameter", value: "50,724 km (4× Earth)" },
       { label: "Mass", value: "14.5 Earth masses" },
-      { label: "Day length", value: "17h 14m" },
-      { label: "Year length", value: "84 Earth years" },
-      { label: "Distance from Sun", value: "19.2 AU (2.87 billion km)" },
-      { label: "Axial tilt", value: "97.8° (rotates on its side)" },
-      { label: "Known moons", value: "27" },
+      { label: "Mean distance from Sun", value: "19.2 AU (2.87 billion km)" },
+      { label: "Orbital period", value: "84 Earth years" },
+      { label: "Rotational period", value: "17h 14m (retrograde)" },
+      { label: "Axial tilt", value: "97.8°" },
+      { label: "Confirmed moons", value: "27" },
+      { label: "Discovered", value: "1781 by William Herschel" },
     ],
     viewing:
-      "Uranus is on the edge of naked-eye visibility (mag ~5.7) under very dark skies — most people need binoculars. It looks like a small blue-green dot.",
-    funFact:
-      "It rains diamonds on Uranus. The pressure deep in its atmosphere is so extreme that carbon atoms get squeezed into diamond crystals that drift down through the planet.",
+      "Uranus is at the threshold of naked-eye visibility under genuinely dark skies (magnitude 5.7). It appears as a pale blue-green dot in binoculars; a telescope reveals only a small disc with little surface detail visible from Earth. It was the first planet discovered with a telescope, and the first not known to ancient astronomers.",
+    significance:
+      "Uranus and Neptune are the only major planets in the solar system that have not been studied by a dedicated orbital mission. Voyager 2's brief 1986 flyby remains the source of most of what is known about Uranus up close. The 2023 Planetary Science Decadal Survey identified a Uranus orbiter and probe as the highest-priority flagship mission for the coming decade — a launch is targeted for the early 2030s.",
   },
+
   Neptune: {
-    tagline: "The wind-blasted blue giant on the edge",
+    tagline: "The eighth and outermost planet",
     overview:
-      "Neptune is the windiest planet in the solar system, with storms reaching 2,100 km/h — faster than the speed of sound on Earth. Its deep blue color comes from methane absorption, similar to Uranus, but Neptune appears richer blue for reasons not fully understood. It was the first planet discovered through mathematical prediction (1846) rather than observation.",
+      "Neptune is the most distant of the major planets, similar in size and composition to Uranus but slightly more massive. Its deep blue color exceeds what methane absorption alone would predict and remains incompletely explained. Atmospheric winds reach 2,100 km/h, the fastest measured on any planet, despite Neptune receiving only 0.1% the solar energy that reaches Earth. Neptune was the first planet discovered through mathematical prediction: irregularities in Uranus's orbit led astronomers to calculate the position of an unseen perturbing body, which was then confirmed observationally in 1846.",
     facts: [
       { label: "Diameter", value: "49,244 km (3.9× Earth)" },
       { label: "Mass", value: "17.1 Earth masses" },
-      { label: "Day length", value: "16h 6m" },
-      { label: "Year length", value: "165 Earth years" },
-      { label: "Distance from Sun", value: "30.05 AU (4.5 billion km)" },
-      { label: "Moons", value: "14 (Triton is largest)" },
+      { label: "Mean distance from Sun", value: "30.05 AU (4.5 billion km)" },
+      { label: "Orbital period", value: "164.8 Earth years" },
+      { label: "Rotational period", value: "16h 6m" },
       { label: "Wind speeds", value: "Up to 2,100 km/h" },
+      { label: "Confirmed moons", value: "14" },
+      { label: "Discovered", value: "1846 (Le Verrier, Galle, Adams)" },
     ],
     viewing:
-      "Neptune is too faint to see without optical aid (mag 7.8). In a telescope it appears as a tiny blue disk. Triton, its largest moon, is visible in larger amateur scopes.",
-    funFact:
-      "Neptune has only completed one full orbit since its 1846 discovery — it returned to its discovery position in 2011, 165 years later.",
+      "Neptune is too faint to observe with the unaided eye, requiring binoculars or a telescope. Through a small telescope it appears as a tiny blue disc, distinguishable from a star primarily by its color and slight non-stellar appearance at high magnification. Its largest moon, Triton, is visible in larger amateur instruments.",
+    significance:
+      "Neptune has completed only one full orbit since its discovery — it returned to its 1846 discovery position in 2011. Its largest moon, Triton, orbits in retrograde and is almost certainly a captured Kuiper Belt object similar to Pluto. Triton is geologically active, with cryovolcanoes erupting nitrogen ice, and was photographed up close only once, by Voyager 2 in 1989.",
   },
+
   Sun: {
-    tagline: "Our star — the engine of everything",
+    tagline: "The star at the center of the solar system",
     overview:
-      "The Sun contains 99.86% of the mass of the entire solar system. Its core fuses 600 million tons of hydrogen into helium every second at a temperature of 15 million °C. Sunlight you see right now took 8 minutes 20 seconds to reach you — but that same energy spent ~100,000 years bouncing its way out of the Sun's interior before escaping.",
+      "The Sun is a G-type main-sequence star approximately 4.6 billion years old and roughly halfway through its hydrogen-fusion lifetime. It contains 99.86% of the total mass of the solar system. In its core, hydrogen is fused into helium at a rate of approximately 600 million tons per second, releasing the energy that sustains every form of life on Earth. The light that reaches Earth from the Sun's surface left it 8 minutes and 20 seconds earlier, but the energy in that light spent on the order of 100,000 years diffusing outward from the core.",
     facts: [
       { label: "Diameter", value: "1,391,400 km (109× Earth)" },
-      { label: "Mass", value: "333,000 Earth masses" },
-      { label: "Surface temperature", value: "5,500°C" },
+      { label: "Mass", value: "1.989 × 10³⁰ kg (333,000 Earth masses)" },
+      { label: "Surface temperature", value: "5,500°C (photosphere)" },
       { label: "Core temperature", value: "15,000,000°C" },
+      { label: "Composition", value: "73% hydrogen, 25% helium, 2% heavier" },
+      { label: "Spectral class", value: "G2V (yellow main sequence)" },
       { label: "Age", value: "4.6 billion years" },
-      { label: "Composition", value: "73% hydrogen, 25% helium" },
-      { label: "Light travel time", value: "8 min 20 sec to Earth" },
+      { label: "Light-time to Earth", value: "8 min 20 sec" },
     ],
     viewing:
-      "Never look at the Sun without proper solar filters or eclipse glasses — even a brief glance through binoculars or a telescope can cause permanent blindness. During a partial or total solar eclipse, certified solar filters are essential.",
-    funFact:
-      "The Sun is not on fire. Fire requires oxygen and chemical combustion. The Sun is glowing because gravitational pressure is squeezing hydrogen atoms together hard enough to fuse them — a totally different process.",
+      "The Sun must never be observed directly without certified solar filters. Brief unaided viewing causes permanent retinal damage; observation through unfiltered binoculars or a telescope causes immediate blindness. Eclipse glasses certified to ISO 12312-2, or properly filtered solar telescopes, are essential. Sunspots, prominences, and the corona during total eclipses are among the most dramatic sights in observational astronomy when proper precautions are taken.",
+    significance:
+      "The Sun's energy output has increased approximately 30% since the formation of the solar system and will continue to brighten as it consumes its hydrogen fuel. In roughly 5 billion years it will exhaust core hydrogen, expand into a red giant large enough to engulf Mercury and possibly Earth, and ultimately shed its outer layers to leave behind a slowly cooling white dwarf about the size of Earth. The carbon and oxygen in your body were forged in earlier-generation stars that lived and died before the Sun ever formed.",
   },
+
   Moon: {
     tagline: "Earth's only natural satellite",
     overview:
-      "The Moon is the fifth-largest moon in the solar system and unusually large relative to its planet. It's slowly drifting away from Earth at 3.8 cm per year. The same face always points toward us because tidal forces have synchronized its rotation and orbit — but we actually see ~59% of the surface over time due to libration.",
+      "The Moon is the fifth-largest natural satellite in the solar system and is unusually large relative to its parent planet — approximately 27% of Earth's diameter. Its rotation period equals its orbital period, a state called tidal locking, which is why the same hemisphere always faces Earth. The lunar surface preserves an extraordinary record of the early solar system because, unlike Earth, it has neither plate tectonics nor weather to erase impact craters. The Apollo program returned 382 kg of lunar samples between 1969 and 1972, transforming planetary science.",
     facts: [
       { label: "Diameter", value: "3,474 km (27% of Earth)" },
-      { label: "Mass", value: "0.0123 Earth masses" },
-      { label: "Distance", value: "384,400 km average" },
-      { label: "Orbital period", value: "27.3 days" },
-      { label: "Phase cycle", value: "29.5 days (synodic month)" },
-      { label: "Surface gravity", value: "1.62 m/s² (17% of Earth)" },
-      { label: "Age", value: "4.5 billion years" },
+      { label: "Mass", value: "7.342 × 10²² kg (1.2% of Earth)" },
+      { label: "Mean distance from Earth", value: "384,400 km" },
+      { label: "Orbital period", value: "27.3 days (sidereal)" },
+      { label: "Phase cycle", value: "29.5 days (synodic)" },
+      { label: "Surface gravity", value: "1.62 m/s² (0.165 g)" },
+      { label: "Surface temperature", value: "-173°C to 127°C" },
+      { label: "Recession rate", value: "3.8 cm per year" },
     ],
     viewing:
-      "First-quarter and last-quarter phases offer the best detail through binoculars or a telescope, when long shadows along the terminator (day-night line) bring out crater relief. Full moon is impressive but flat — the lack of shadows washes out detail.",
-    funFact:
-      "The Moon almost certainly formed from a Mars-sized body, named Theia, slamming into the early Earth ~4.5 billion years ago. The debris coalesced into the Moon within just a few hundred years.",
+      "The Moon is best observed at first or last quarter, when shadows along the terminator (the day-night boundary) reveal crater relief in three dimensions. Full Moon, although bright, is visually flat — the lack of shadow obscures topography. Binoculars are sufficient to study major craters, lunar maria (the dark plains of solidified lava), and mountain ranges like the Apennines.",
+    significance:
+      "The Moon is believed to have formed approximately 4.5 billion years ago when a Mars-sized body, named Theia, struck the proto-Earth a glancing blow. Debris from the collision coalesced in orbit within decades to centuries. Without the Moon, Earth's axial tilt would vary chaotically over geological time, making the climate far less stable; the Moon's gravitational influence stabilizes the seasons that allowed complex life to evolve.",
   },
 };
 
 export const STAR_FACTS: Record<string, ObjectFacts> = {
   Sirius: {
-    tagline: "The brightest star in the night sky",
+    tagline: "The brightest star in Earth's night sky",
     overview:
-      "Sirius is twice the mass of the Sun and 25 times more luminous, but it appears so brilliant mainly because it's nearby — only 8.6 light-years away. It's actually a binary system: a tiny white dwarf companion (Sirius B), the first ever discovered, orbits it every 50 years.",
+      "Sirius is an A-type main-sequence star approximately twice the mass of the Sun and 25 times more luminous. Its apparent brilliance is the result of a fortunate combination — moderately high intrinsic luminosity and very close proximity, only 8.6 light-years from Earth. Sirius is in fact a binary system: the primary, Sirius A, is orbited every 50 years by Sirius B, a white dwarf with the mass of the Sun compressed into a body the size of Earth. Sirius B was the first white dwarf ever discovered, providing crucial evidence for the existence of degenerate matter.",
     facts: [
       { label: "Distance", value: "8.6 light-years" },
-      { label: "Magnitude", value: "-1.46 (brightest in the sky)" },
-      { label: "Spectral type", value: "A1V (hot white-blue)" },
-      { label: "Mass", value: "2.06 Suns" },
-      { label: "Surface temperature", value: "9,940°C" },
-      { label: "Companion", value: "Sirius B (white dwarf)" },
+      { label: "Apparent magnitude", value: "-1.46 (brightest in the sky)" },
+      { label: "Spectral type", value: "A1V (Sirius A)" },
+      { label: "Mass", value: "2.06 solar masses" },
+      { label: "Surface temperature", value: "9,940 K" },
+      { label: "Companion", value: "Sirius B (white dwarf, 1 solar mass)" },
+      { label: "Constellation", value: "Canis Major" },
     ],
     viewing:
-      "Find Orion's belt and follow it down-left — Sirius is the brilliant blue-white star you'll arrive at. It twinkles dramatically when low to the horizon, often flashing through colors.",
-    funFact:
-      "The ancient Egyptians used Sirius's first appearance at dawn (its 'heliacal rising') to predict the annual Nile flood. Their calendar was built around this star.",
+      "Sirius is unmistakable in winter skies (Northern Hemisphere) — extending Orion's belt downward and to the left points directly at it. When low to the horizon, atmospheric turbulence causes Sirius to flash dramatically through different colors, an effect called scintillation that is more pronounced in bright stars.",
+    significance:
+      "Ancient Egyptian civilization organized its calendar around Sirius's heliacal rising — the morning each summer when the star first becomes visible after a 70-day period of conjunction with the Sun. This event coincided with the annual flooding of the Nile, the foundation of Egyptian agriculture, and is considered one of the earliest applications of precise astronomical observation to civic life.",
   },
+
   Betelgeuse: {
-    tagline: "The red supergiant about to explode",
+    tagline: "A red supergiant near the end of its life",
     overview:
-      "Betelgeuse is so enormous that if it sat where the Sun is, it would swallow Mercury, Venus, Earth, Mars, and reach near Jupiter's orbit. It's nearing the end of its life and will go supernova — sometime in the next 100,000 years. When it does, it'll briefly outshine the full Moon and be visible in daylight.",
+      "Betelgeuse is one of the largest stars visible to the naked eye. If placed at the position of the Sun, its surface would extend past the orbit of Mars and possibly to Jupiter. Despite a mass only 17 times that of the Sun, it has expanded to enormous size as it nears the end of its hydrogen-fusion phase. Betelgeuse is a known semi-regular variable, brightening and dimming over periods of months to years as its outer layers pulsate. It will end its life as a Type II supernova, an event that will briefly outshine the full Moon and remain visible in daylight for weeks.",
     facts: [
-      { label: "Distance", value: "642 light-years" },
-      { label: "Magnitude", value: "0.50 (variable)" },
-      { label: "Spectral type", value: "M1-2 (red supergiant)" },
+      { label: "Distance", value: "~642 light-years" },
+      { label: "Apparent magnitude", value: "0.0 to 1.6 (variable)" },
+      { label: "Spectral type", value: "M1-2 Iab (red supergiant)" },
+      { label: "Mass", value: "~17 solar masses" },
       { label: "Diameter", value: "~700× the Sun" },
-      { label: "Mass", value: "~17 Suns" },
       { label: "Age", value: "~10 million years" },
+      { label: "Constellation", value: "Orion" },
     ],
     viewing:
-      "The reddish-orange star marking Orion's right shoulder. Compare its color to bluish Rigel at Orion's foot — the contrast is striking.",
-    funFact:
-      "In late 2019 Betelgeuse mysteriously dimmed by half, sparking speculation that supernova was imminent. Turns out it had ejected a massive cloud of dust that briefly blocked our view.",
+      "Betelgeuse marks the right shoulder of Orion (left as we view it from the Northern Hemisphere) and is one of the few stars whose distinctly orange-red color is obvious to the unaided eye. Comparing Betelgeuse to bluish Rigel at the opposite corner of Orion is a clear demonstration that stars come in different colors corresponding to different surface temperatures.",
+    significance:
+      "When Betelgeuse explodes — likely within the next 100,000 years, though it could be tomorrow — it will be the closest supernova in recorded history. From 642 light-years away the radiation poses no danger to Earth, but the visual spectacle will be without precedent in human civilization. In late 2019 Betelgeuse dimmed by half over several months, prompting speculation that the explosion was imminent. The dimming was eventually attributed to a large dust cloud the star had ejected, which had temporarily obscured part of its visible surface.",
   },
+
   Polaris: {
-    tagline: "The North Star — Earth's celestial pole",
+    tagline: "The current North Star",
     overview:
-      "Polaris sits less than 1° from the celestial north pole, which is why it appears nearly stationary as Earth rotates. Every other star in the northern sky wheels around it. It's actually a triple-star system with a yellow supergiant primary that's ~2,000× more luminous than the Sun.",
+      "Polaris is positioned within 0.7° of the celestial north pole, making it appear nearly stationary as Earth rotates while every other star in the northern sky wheels around it. This positioning is coincidental and temporary — Earth's rotational axis precesses (wobbles slowly) over a 26,000-year cycle, and Polaris has only been close to the pole for the last few thousand years. Polaris is itself a Cepheid variable, pulsing slightly in brightness over a period of 4 days, and is the closest Cepheid to Earth, which has made it a critical calibrator for the cosmic distance ladder.",
     facts: [
       { label: "Distance", value: "433 light-years" },
-      { label: "Magnitude", value: "1.98 (variable Cepheid)" },
+      { label: "Apparent magnitude", value: "1.98 (slightly variable)" },
       { label: "Spectral type", value: "F7Ib (yellow supergiant)" },
-      { label: "Mass", value: "5.4 Suns" },
-      { label: "Diameter", value: "37× the Sun" },
-      { label: "Pole distance", value: "0.66°" },
+      { label: "Mass", value: "5.4 solar masses" },
+      { label: "Luminosity", value: "~2,000× the Sun" },
+      { label: "Distance from pole", value: "0.66°" },
+      { label: "Constellation", value: "Ursa Minor" },
     ],
     viewing:
-      "Find the Big Dipper, then follow the line through the two stars at the end of its 'cup' — they point directly at Polaris.",
-    funFact:
-      "Polaris won't always be the North Star. Earth's axis wobbles over a 26,000-year cycle (precession). In ~13,000 years, Vega will be the pole star instead.",
+      "Polaris is found by following the line through the two outer stars of the Big Dipper's bowl, Dubhe and Merak, extending it about five times that distance. Because Polaris remains at a fixed altitude equal to the observer's latitude, it has been the principal navigational star of the Northern Hemisphere for centuries.",
+    significance:
+      "Earth's axial precession means the identity of the pole star changes on geological timescales. Around 3000 BC, Thuban (Alpha Draconis) marked north — the alignment shafts of the Egyptian pyramids point toward Thuban, not Polaris. Vega, the brightest star in Lyra, will become the pole star around the year 14,000 AD as the precession cycle continues.",
   },
+
   Vega: {
-    tagline: "The future pole star",
+    tagline: "A reference star of stellar physics",
     overview:
-      "Vega is one of the most studied stars in the sky after the Sun. It rotates so fast (once every 12.5 hours) that it's noticeably squashed — its equator bulges 19% wider than its poles. A debris disk surrounding it suggests planet formation may be underway.",
+      "Vega is among the most thoroughly studied stars after the Sun. It served as the original photometric reference for the magnitude scale — its brightness was defined as magnitude 0 at all wavelengths — though more precise modern systems have refined this calibration. Vega rotates so rapidly, completing one rotation every 12.5 hours, that its equatorial diameter exceeds its polar diameter by 19%, producing measurable temperature variations between equator and poles. A debris disk surrounding the star, discovered in 1983, provided the first observational evidence that planet-formation processes occur around stars besides the Sun.",
     facts: [
       { label: "Distance", value: "25 light-years" },
-      { label: "Magnitude", value: "0.03" },
-      { label: "Spectral type", value: "A0V (white)" },
-      { label: "Mass", value: "2.1 Suns" },
-      { label: "Age", value: "455 million years" },
+      { label: "Apparent magnitude", value: "0.03" },
+      { label: "Spectral type", value: "A0V (white main sequence)" },
+      { label: "Mass", value: "2.1 solar masses" },
+      { label: "Luminosity", value: "40× the Sun" },
       { label: "Rotation period", value: "12.5 hours" },
+      { label: "Age", value: "455 million years" },
+      { label: "Constellation", value: "Lyra" },
     ],
     viewing:
-      "The brilliant blue-white star high overhead in summer evenings (Northern Hemisphere). It anchors the Summer Triangle along with Deneb and Altair.",
-    funFact:
-      "Vega was the first star ever photographed (1850) and the first to have its spectrum recorded — making it the foundational reference for stellar magnitude scales.",
+      "Vega is overhead during summer evenings in the Northern Hemisphere and is one of the brightest stars visible. With Deneb (in Cygnus) and Altair (in Aquila), it forms the Summer Triangle — three stars far apart in the sky but bright enough to dominate the northern summer night.",
+    significance:
+      "Vega was the first star besides the Sun to be photographed (1850) and the first to have its spectrum recorded (1872). Its position has made it a central reference point for stellar astronomy for nearly two centuries. Earth's precession will make Vega the pole star approximately 12,000 years from now, just as it was approximately 12,000 BC.",
   },
+
   Arcturus: {
-    tagline: "The orange giant racing through our galaxy",
+    tagline: "The brightest star in the northern sky",
     overview:
-      "Arcturus is the brightest star in the northern celestial hemisphere. Unusually for a bright star, it's not part of our galaxy's spiral disk — it's a member of an older 'halo' population, plunging through our region at 122 km/s. In about 4,000 years it will have moved noticeably from its current position.",
+      "Arcturus is a K-type giant star, having exhausted hydrogen in its core and expanded to roughly 25 times the Sun's diameter. Unlike most bright stars in our region, which belong to the disk population of relatively young stars, Arcturus is a member of the older halo population — its orbit is tilted relative to the galactic plane and carries it through our region at high velocity. Within a few thousand years it will have moved a noticeable distance from its current position, eventually receding from our vicinity entirely.",
     facts: [
       { label: "Distance", value: "36.7 light-years" },
-      { label: "Magnitude", value: "-0.05" },
+      { label: "Apparent magnitude", value: "-0.05" },
       { label: "Spectral type", value: "K1.5III (orange giant)" },
       { label: "Diameter", value: "25× the Sun" },
+      { label: "Mass", value: "~1.1 solar masses" },
+      { label: "Velocity", value: "122 km/s relative to the Sun" },
       { label: "Age", value: "~7 billion years" },
-      { label: "Velocity", value: "122 km/s relative to Sun" },
+      { label: "Constellation", value: "Boötes" },
     ],
     viewing:
-      "Follow the curve of the Big Dipper's handle outward — 'arc to Arcturus.' It's the warm orange star at the end of that curve.",
-    funFact:
-      "Arcturus's light was used to switch on the lights at the 1933 Chicago World's Fair. The star is 37 light-years away — exactly the time since the previous fair in 1893.",
+      "Arcturus is found by following the curve of the Big Dipper's handle outward — a mnemonic captured in the phrase 'arc to Arcturus.' Its distinctly warm color is visible without optical aid. In late spring and summer evenings it dominates the southwestern sky from northern latitudes.",
+    significance:
+      "Light from Arcturus was used to switch on the floodlights at the opening of the 1933 Chicago World's Fair. The star is approximately 37 light-years away, almost exactly the time elapsed since the previous Chicago fair in 1893 — a poetic coincidence the organizers exploited. The light captured by photoelectric cells that night had begun its journey across interstellar space when the previous fair was being constructed.",
   },
+
   Rigel: {
-    tagline: "Orion's brilliant blue foot",
+    tagline: "A blue supergiant in Orion",
     overview:
-      "Rigel is one of the most luminous stars visible to the naked eye — it puts out 120,000 times the light of our Sun. Despite Betelgeuse being designated 'Alpha Orionis,' Rigel ('Beta') is usually the brighter of the two. It's a multiple-star system with at least four components.",
+      "Rigel is a B-type blue supergiant approximately 21 times the mass of the Sun and 120,000 times its luminosity — among the most luminous stars visible to the naked eye. Although designated Beta Orionis, Rigel typically outshines Alpha Orionis (Betelgeuse), a designation inconsistency that pre-dates standardized stellar nomenclature. Rigel is in fact a multiple-star system with at least four components, though only the primary is visible without a telescope.",
     facts: [
-      { label: "Distance", value: "860 light-years" },
-      { label: "Magnitude", value: "0.13" },
+      { label: "Distance", value: "~860 light-years" },
+      { label: "Apparent magnitude", value: "0.13" },
       { label: "Spectral type", value: "B8Ia (blue supergiant)" },
-      { label: "Mass", value: "21 Suns" },
-      { label: "Luminosity", value: "120,000× Sun" },
+      { label: "Mass", value: "21 solar masses" },
+      { label: "Luminosity", value: "120,000× the Sun" },
       { label: "Diameter", value: "78× the Sun" },
+      { label: "Constellation", value: "Orion" },
     ],
     viewing:
-      "The bright blue-white star at the bottom-right of Orion (lower-left in the Southern Hemisphere). The color contrast with Betelgeuse on the opposite corner is striking.",
-    funFact:
-      "Rigel will end its life as a supernova within the next few million years, leaving behind either a neutron star or a black hole.",
+      "Rigel marks the lower right corner of Orion as seen from the Northern Hemisphere (lower left from the Southern Hemisphere). Its blue-white color contrasts dramatically with red Betelgeuse at the opposite corner, providing an immediate visual demonstration of stellar temperature variation.",
+    significance:
+      "Like Betelgeuse, Rigel is massive enough to end its life as a supernova, though estimates of its remaining lifetime range from a few million to ten million years. Its eventual collapse will leave behind either a neutron star or a black hole, depending on the precise final mass after the explosion ejects its outer layers.",
   },
 };
 
 export const DEEPSKY_FACTS: Record<string, ObjectFacts> = {
   M31: {
-    tagline: "Our nearest large galactic neighbor",
+    tagline: "The nearest large galaxy to the Milky Way",
     overview:
-      "The Andromeda Galaxy contains roughly a trillion stars — about twice as many as our Milky Way — and spans 220,000 light-years across. It's the most distant object visible to the naked eye, and it's hurtling toward us at 110 km/s. In about 4.5 billion years it will collide and merge with the Milky Way to form a single elliptical galaxy.",
+      "The Andromeda Galaxy is a barred spiral galaxy approximately 2.5 million light-years from Earth, the nearest major galaxy to the Milky Way and a member of the same Local Group of galaxies. Recent measurements estimate it contains about 1 trillion stars — roughly twice the Milky Way's stellar population — and spans 220,000 light-years across, more than twice the Milky Way's diameter. Andromeda is the most distant object readily visible to the unaided eye, and the only large galaxy whose individual structures (dust lanes, satellite galaxies, even individual variable stars) can be resolved by amateur instruments.",
     facts: [
-      { label: "Distance", value: "2.5 million light-years" },
-      { label: "Magnitude", value: "3.4" },
-      { label: "Type", value: "Spiral galaxy (SA(s)b)" },
+      { label: "Distance", value: "2.537 million light-years" },
+      { label: "Apparent magnitude", value: "3.4" },
+      { label: "Type", value: "Barred spiral galaxy (SA(s)b)" },
       { label: "Diameter", value: "220,000 light-years" },
       { label: "Stars", value: "~1 trillion" },
-      { label: "Mass", value: "1.5 trillion Suns" },
+      { label: "Mass", value: "~1.5 trillion solar masses" },
+      { label: "Approach velocity", value: "110 km/s toward Milky Way" },
     ],
     viewing:
-      "Look between the constellations Andromeda and Cassiopeia. To the naked eye it's a faint smudge; binoculars show its bright core; a telescope reveals dust lanes and two satellite galaxies (M32 and M110).",
-    funFact:
-      "The light hitting your eyes from Andromeda right now left the galaxy 2.5 million years ago — when our human ancestors were just beginning to use stone tools.",
+      "Andromeda is found between the constellations Andromeda and Cassiopeia and is visible to the unaided eye as a faint, elongated smudge in dark skies. Binoculars reveal a clear oval glow with a brighter core; modest telescopes show its dust lanes and the two prominent satellite galaxies M32 and M110. Most of the galaxy is too faint to see in any single observation — what most people perceive is only the bright central bulge.",
+    significance:
+      "Andromeda and the Milky Way are on a collision course and will merge in approximately 4.5 billion years, eventually forming a single elliptical galaxy that astronomers have informally named 'Milkomeda.' Stellar collisions during the merger will be vanishingly rare due to the immense distances between stars within each galaxy, but the gravitational reorganization will radically reshape both galaxies. The light reaching Earth from Andromeda today left the galaxy 2.5 million years ago — when the human genus Homo had only just emerged in East Africa.",
   },
+
   M42: {
-    tagline: "A stellar nursery 1,344 light-years away",
+    tagline: "The nearest active region of star formation",
     overview:
-      "The Orion Nebula is one of the most studied objects in deep-sky astronomy. It's an active stellar nursery where hundreds of new stars are forming inside dense clouds of hydrogen gas, illuminated by the four bright young stars at its heart called the Trapezium. The whole nebula is part of a much larger cloud complex spanning the constellation of Orion.",
+      "The Orion Nebula is an emission nebula 1,344 light-years from Earth — among the closest stellar nurseries to our solar system. It is part of the much larger Orion Molecular Cloud Complex, which extends across most of the constellation. Within the visible nebula, hundreds of new stars are forming inside dense pockets of hydrogen gas, illuminated and ionized by the four hot young stars at its center known collectively as the Trapezium. The nebula is one of the most studied objects in astronomy because its proximity allows detailed observation of every stage of stellar birth.",
     facts: [
       { label: "Distance", value: "1,344 light-years" },
-      { label: "Magnitude", value: "4.0" },
-      { label: "Type", value: "Emission nebula (H II region)" },
+      { label: "Apparent magnitude", value: "4.0" },
+      { label: "Type", value: "H II region (emission nebula)" },
       { label: "Diameter", value: "24 light-years" },
-      { label: "Mass", value: "~2,000 Suns of gas" },
-      { label: "Age", value: "<1 million years (very young)" },
+      { label: "Mass", value: "~2,000 solar masses of gas" },
+      { label: "Age", value: "<1 million years" },
+      { label: "Constellation", value: "Orion" },
     ],
     viewing:
-      "Visible to the naked eye as the fuzzy 'middle star' of Orion's sword, hanging below his belt. Even small binoculars reveal its glow; a telescope shows the wing-like structure and the four Trapezium stars.",
-    funFact:
-      "The Orion Nebula has been observed since at least 1610, but ancient stargazers somehow missed mentioning it — Ptolemy and the Maya, both meticulous sky-watchers, never recorded it.",
+      "The Orion Nebula appears as the fuzzy 'middle star' of Orion's sword, hanging below the three stars of his belt. It is visible without optical aid as a clearly non-stellar smudge. Binoculars reveal a wing-shaped glowing region; a small telescope shows the four bright Trapezium stars at its center along with intricate filaments of gas.",
+    significance:
+      "Despite being prominent and observable from antiquity, the Orion Nebula is conspicuously absent from ancient records. Ptolemy, the Maya, and Chinese astronomers all maintained meticulous catalogs of celestial objects but none of them mentioned a fuzzy patch where we see one today. This has led to speculation that the nebula may have brightened significantly within historical times — perhaps as one of the embedded young stars cleared away obscuring dust — though the matter remains unresolved.",
   },
+
   M45: {
-    tagline: "The Seven Sisters — a young open cluster",
+    tagline: "An open cluster of young, hot stars",
     overview:
-      "The Pleiades is one of the closest and most photographed star clusters. It contains over 1,000 confirmed stars, but only the seven brightest are visible to the naked eye. The cluster is just 100 million years old (very young as stars go) and is currently passing through a cloud of interstellar dust that gives the brighter stars a beautiful blue reflection nebula halo.",
+      "The Pleiades is one of the closest open star clusters to Earth and one of the most prominent. The cluster contains over 1,000 confirmed members, though only the seven brightest are typically visible to the unaided eye. The cluster is approximately 100 million years old — extremely young by stellar standards — and its hottest stars are still surrounded by reflective veils of interstellar dust the cluster is currently passing through, producing the distinctive blue nebulosity visible in long-exposure photographs.",
     facts: [
       { label: "Distance", value: "444 light-years" },
-      { label: "Magnitude", value: "1.6" },
-      { label: "Type", value: "Open star cluster" },
-      { label: "Stars", value: "~1,000+" },
+      { label: "Apparent magnitude", value: "1.6 (collective)" },
+      { label: "Type", value: "Open cluster" },
+      { label: "Member stars", value: "~1,000+" },
       { label: "Age", value: "~100 million years" },
-      { label: "Diameter", value: "8 light-years" },
+      { label: "Diameter", value: "8 light-years (cluster core)" },
+      { label: "Constellation", value: "Taurus" },
     ],
     viewing:
-      "A tight, dipper-shaped clump of blue stars northwest of Orion. Most people see 6 stars with the naked eye; sharp eyes see 7-9. Binoculars reveal dozens more.",
-    funFact:
-      "The Pleiades appears in mythology across nearly every continent — Greek, Maori, Aboriginal Australian, Lakota, Japanese (Subaru), Norse — making it one of the most universally recognized objects in the sky.",
+      "The Pleiades is unmistakable as a tight clump of bluish stars northwest of Orion, approximately the apparent size of the full Moon. Most observers count six naked-eye stars, though seven or more are visible to those with sharp eyesight under dark skies. Binoculars reveal dozens of additional cluster members. The reflection nebulosity is detectable only in long-exposure photographs.",
+    significance:
+      "The Pleiades is among the most universally recognized celestial objects. Ancient and modern cultures across Europe, North and South America, Australia, Polynesia, China, and Japan all developed independent mythologies for the cluster — typically involving seven women, sisters, or lost children. The Japanese name Subaru, retained as an automotive brand, is one example. Bronze Age cultures used the Pleiades' annual heliacal rising to mark the beginning of the agricultural year.",
   },
+
   M1: {
-    tagline: "The remnant of a 1054 supernova",
+    tagline: "A supernova remnant from 1054",
     overview:
-      "The Crab Nebula is what's left of a star that Chinese astronomers watched explode in 1054 AD — they recorded a 'guest star' bright enough to be visible in daylight for 23 days. At its center spins a pulsar, the collapsed neutron-star core of the original star, rotating 30 times per second and sweeping radio beams across Earth.",
+      "The Crab Nebula is the expanding debris cloud of a star whose explosion was witnessed and recorded by Chinese astronomers in 1054 AD. The 'guest star' was bright enough to remain visible in daylight for 23 days and observable at night for nearly two years before fading. At the center of the nebula spins the Crab Pulsar — the collapsed neutron-star core of the original star, rotating 30 times per second and emitting beams of radio, optical, X-ray, and gamma-ray radiation that sweep across Earth like a lighthouse.",
     facts: [
-      { label: "Distance", value: "6,500 light-years" },
-      { label: "Magnitude", value: "8.4" },
+      { label: "Distance", value: "~6,500 light-years" },
+      { label: "Apparent magnitude", value: "8.4" },
       { label: "Type", value: "Supernova remnant" },
-      { label: "Diameter", value: "11 light-years" },
+      { label: "Diameter", value: "~11 light-years" },
       { label: "Pulsar period", value: "33 milliseconds" },
       { label: "Expansion rate", value: "1,500 km/s" },
+      { label: "Constellation", value: "Taurus" },
     ],
     viewing:
-      "Requires a telescope and dark skies. Look for it near the southern horn of Taurus (Zeta Tauri). At low magnification it's a faint oval smudge.",
-    funFact:
-      "The Crab pulsar emits more energy in a single second than the Sun does in a year — the leftover rotational kinetic energy of an entire star compressed into a city-sized sphere.",
+      "The Crab Nebula requires a telescope and dark skies. It lies near Zeta Tauri, the southern horn of Taurus. Through small telescopes it appears as a faint oval smudge; larger amateur instruments under good conditions can reveal hints of internal structure. Photographically, the nebula's filamentary structure and bluish synchrotron core are striking.",
+    significance:
+      "The Crab Pulsar is among the most studied objects in high-energy astrophysics. Its rotational kinetic energy, gradually decreasing as the pulsar slows, powers the entire nebula's continued radiation across all wavelengths — the pulsar emits more energy each second than the Sun produces in a full year, all from the leftover spin energy of a stellar core compressed into a sphere only 20 km across.",
   },
+
   M51: {
-    tagline: "The Whirlpool — galaxies caught in collision",
+    tagline: "A pair of interacting galaxies",
     overview:
-      "M51 is two galaxies in the act of merging. The larger spiral (NGC 5194) is being distorted by the gravity of its smaller companion (NGC 5195), which is currently passing behind it. The interaction has triggered intense star formation along M51's spiral arms, making them unusually bright and well-defined.",
+      "The Whirlpool is a pair of gravitationally interacting galaxies. The larger spiral, NGC 5194, is being distorted by the smaller companion NGC 5195, which is currently passing behind it on a complex orbit. The interaction has triggered intense star formation along the spiral arms, making them unusually bright and well-defined. The pair offers one of the clearest views available of the dynamical processes that shape galaxy evolution, and is a textbook example used in undergraduate astronomy.",
     facts: [
-      { label: "Distance", value: "23 million light-years" },
-      { label: "Magnitude", value: "8.4" },
-      { label: "Type", value: "Interacting spiral galaxies" },
-      { label: "Diameter", value: "60,000 light-years" },
-      { label: "Companion", value: "NGC 5195 (smaller dwarf)" },
+      { label: "Distance", value: "~23 million light-years" },
+      { label: "Apparent magnitude", value: "8.4" },
+      { label: "Type", value: "Interacting spiral pair" },
+      { label: "Diameter", value: "~60,000 light-years" },
+      { label: "Companion", value: "NGC 5195" },
+      { label: "Constellation", value: "Canes Venatici" },
     ],
     viewing:
-      "In the constellation Canes Venatici, just below the Big Dipper's handle. Visible as a fuzzy patch in binoculars; a 6-inch+ telescope reveals the spiral structure.",
-    funFact:
-      "M51 was the first galaxy in which spiral structure was identified — by Lord Rosse in 1845, using a 72-inch reflector that was the largest telescope in the world for over 70 years.",
+      "The Whirlpool lies just south of the end of the Big Dipper's handle. It is visible as a faint patch in binoculars under dark skies; a telescope of 6 inches or larger reveals the dual-nucleus structure and hints of spiral arms. Photographically it is among the most rewarding deep-sky targets for amateur astrophotographers.",
+    significance:
+      "M51 was the first galaxy in which spiral structure was identified, by William Parsons (Lord Rosse) in 1845. Parsons used the 72-inch Leviathan of Parsonstown — the largest telescope in the world for over 70 years — and his careful sketches showed clearly resolved arms decades before photography could capture them. The recognition that 'spiral nebulae' were actually distant galaxies rather than nearby gas clouds had to wait until Edwin Hubble's distance measurements in 1924.",
   },
 };
 
 export const SATELLITE_FACTS: Record<string, ObjectFacts> = {
   "ISS (ZARYA)": {
-    tagline: "Humanity's home in space",
+    tagline: "The largest human-made object in orbit",
     overview:
-      "The International Space Station is the largest object humans have ever placed in orbit — about the size of an American football field, including the solar arrays. It's been continuously occupied since November 2000, making it the longest sustained human presence in space. It orbits at ~408 km altitude and circles Earth every 93 minutes, meaning the crew sees 16 sunrises and sunsets every day.",
+      "The International Space Station is approximately the size of an American football field including its solar arrays — the largest structure ever placed in orbit by human beings. Construction began in 1998 with the Russian-built Zarya module, and the station has been continuously occupied since November 2000, now representing the longest continuous human presence in space. It orbits at approximately 408 km altitude and circles Earth every 92.9 minutes; its crew sees 16 sunrises and 16 sunsets each day.",
     facts: [
-      { label: "Altitude", value: "~408 km" },
+      { label: "Mean altitude", value: "~408 km" },
       { label: "Orbital speed", value: "27,600 km/h (7.66 km/s)" },
       { label: "Orbital period", value: "92.9 minutes" },
-      { label: "Mass", value: "420,000 kg" },
+      { label: "Mass", value: "~420,000 kg" },
       { label: "Pressurized volume", value: "916 m³" },
-      { label: "Crew size", value: "Typically 7" },
-      { label: "Construction started", value: "1998" },
+      { label: "Typical crew", value: "7" },
+      { label: "Continuous occupation since", value: "November 2000" },
     ],
     viewing:
-      "When sunlit and overhead, the ISS appears as a brilliant non-twinkling 'star' moving steadily across the sky in 4-6 minutes. It's the third-brightest object in the sky after the Sun and Moon. Best viewed within 1-2 hours of dawn or dusk, when it's lit but you're in shadow.",
-    funFact:
-      "The ISS travels so fast that astronauts on board age very slightly slower than people on the ground — about 0.007 seconds per 6-month mission, due to special relativity.",
+      "When sunlit and overhead, the ISS appears as a brilliant non-twinkling point of light moving steadily across the sky in 4 to 6 minutes. It is the third-brightest object in the sky after the Sun and Moon, easily exceeding any star or planet at peak brightness. Best viewing is within 1 to 2 hours of dawn or dusk, when the station is in sunlight while the observer remains in Earth's shadow.",
+    significance:
+      "The ISS is the most expensive single object ever constructed, with cumulative costs across all partner agencies estimated above $150 billion. Its scientific output includes thousands of microgravity experiments spanning materials science, biology, medicine, and fundamental physics. The station's construction required over 40 assembly missions and is the longest-running international cooperative project in human history, involving the United States, Russia, the European Space Agency, Japan, and Canada continuously since the late 1990s — including periods of significant geopolitical tension between member states.",
   },
+
   TIANGONG: {
     tagline: "China's permanent orbital outpost",
     overview:
-      "Tiangong (天宫, 'Heavenly Palace') is China's modular space station, completed in late 2022. It has three modules — Tianhe (core), Wentian, and Mengtian — and houses a crew of three on six-month rotations. It's roughly a fifth the mass of the ISS but designed for a 10-15 year operational life.",
+      "Tiangong (天宫, 'Heavenly Palace') is China's modular space station, completed in late 2022 and operating with continuous three-person crews on six-month rotations. It consists of three primary modules — the Tianhe core module and the Wentian and Mengtian laboratory modules — and represents China's third generation of crewed space stations following the experimental Tiangong-1 and Tiangong-2 prototypes. Although smaller than the ISS, Tiangong is designed for an operational lifespan of 10 to 15 years and supports a comparable range of scientific research.",
     facts: [
-      { label: "Altitude", value: "~390 km" },
-      { label: "Orbital speed", value: "~27,500 km/h" },
+      { label: "Mean altitude", value: "~390 km" },
+      { label: "Orbital period", value: "~92 minutes" },
       { label: "Mass", value: "~100,000 kg" },
-      { label: "Modules", value: "3 (Tianhe, Wentian, Mengtian)" },
-      { label: "Crew size", value: "3" },
-      { label: "First launch", value: "April 2021" },
+      { label: "Modules", value: "Tianhe, Wentian, Mengtian" },
+      { label: "Crew capacity", value: "3 (rotating)" },
+      { label: "First module launch", value: "April 2021" },
+      { label: "Construction completed", value: "November 2022" },
     ],
     viewing:
-      "Visible as a steadily moving point of light, similar to (but dimmer than) the ISS. Track it the same way: look near dawn or dusk passes when it's sunlit against a dark sky.",
-    funFact:
-      "Tiangong is the third permanently crewed station China has launched; the previous two (Tiangong-1 and Tiangong-2) were prototypes that have since been deorbited.",
+      "Tiangong appears similar to the ISS in flight characteristics — a steady non-blinking point of light crossing the sky in several minutes — but is dimmer due to its smaller size. Pass predictions are available from the same tracking sources as the ISS. Like all low-Earth-orbit satellites, it is visible only when sunlit against a darkened sky, generally during twilight.",
+    significance:
+      "Tiangong's existence is a direct consequence of the 2011 Wolf Amendment, a U.S. law prohibiting NASA from bilateral cooperation with the Chinese space program. Excluded from ISS partnership, China developed independent crewed-spaceflight capability, and now operates the only space station outside the ISS partnership. As of late 2024, Tiangong has hosted international experiments from over a dozen countries, establishing China as a parallel pole of human spaceflight.",
   },
+
   HST: {
-    tagline: "The telescope that rewrote astronomy",
+    tagline: "An optical observatory in low Earth orbit",
     overview:
-      "The Hubble Space Telescope was launched in 1990 and has been operating above Earth's atmosphere ever since. By orbiting outside the distortion of our atmosphere, it captures sharper images than any ground-based telescope of its size. Its observations have determined the universe's age, confirmed accelerating expansion, and produced some of the most iconic images in science.",
+      "The Hubble Space Telescope was launched in April 1990 and has been operating in low Earth orbit ever since, longer than any other major space observatory. By orbiting above the atmosphere, Hubble avoids the optical distortion that limits ground-based telescopes, achieving image resolution that for decades was unmatched by any larger ground-based instrument. Its observations established the age of the universe, confirmed the existence of dark energy through measurement of accelerating cosmic expansion, and produced many of the most-reproduced images in the history of science, including the Hubble Deep Field and the Pillars of Creation.",
     facts: [
-      { label: "Altitude", value: "~540 km" },
-      { label: "Mirror diameter", value: "2.4 m" },
+      { label: "Mean altitude", value: "~540 km" },
+      { label: "Primary mirror", value: "2.4 m diameter" },
       { label: "Mass", value: "11,110 kg" },
       { label: "Length", value: "13.2 m" },
-      { label: "Launched", value: "April 24, 1990" },
-      { label: "Servicing missions", value: "5 (last in 2009)" },
+      { label: "Launched", value: "April 24, 1990 (STS-31)" },
+      { label: "Servicing missions", value: "5 (final in 2009)" },
+      { label: "Wavelengths", value: "Ultraviolet, visible, near-infrared" },
     ],
     viewing:
-      "Hubble is faint (around magnitude 2-3 at best) and requires you to know exactly where to look — but it does pass overhead and is technically visible to the naked eye. Track its passes via the app's tonight feed.",
-    funFact:
-      "Hubble's launch mirror was famously flawed — ground polished to the wrong shape — producing blurry images for its first three years until astronauts installed corrective optics on a 1993 spacewalk, a repair often compared to fitting glasses on a telescope.",
+      "Hubble passes overhead and is technically observable at peak brightness around magnitude 2 to 3, comparable to a moderate star. However, predicting and locating Hubble passes is more difficult than for the ISS or Tiangong because of its smaller size and lower brightness. The app surfaces visible passes when they occur.",
+    significance:
+      "Hubble's primary mirror was launched with a manufacturing flaw — incorrectly polished by approximately 2 microns at the edges — producing blurry images for the telescope's first three years of operation. The 1993 servicing mission installed corrective optics, an achievement frequently compared to fitting the telescope with eyeglasses. The successful repair preserved a $4.7 billion observatory and demonstrated the value of in-orbit servicing, lessons that have since been applied to satellite design and mission planning across the industry.",
   },
 };
 
@@ -430,7 +484,6 @@ export function getObjectFacts(name: string, kind: string): ObjectFacts | null {
     return STAR_FACTS[name] ?? null;
   }
   if (kind === "deep-sky") {
-    // deep-sky names are like "M31 — Andromeda Galaxy" — extract the M-id
     const idMatch = name.match(/^M(\d+)/);
     if (idMatch) {
       const key = `M${idMatch[1]}`;

@@ -145,9 +145,9 @@ function DetailContent({
             <Tab active={tab === "viewing"} onClick={() => setTab("viewing")} icon={<Eye className="h-3 w-3" />}>
               Viewing
             </Tab>
-            {facts.funFact && (
+            {(facts.significance || facts.funFact) && (
               <Tab active={tab === "fact"} onClick={() => setTab("fact")} icon={<Sparkles className="h-3 w-3" />}>
-                Fun Fact
+                Significance
               </Tab>
             )}
           </div>
@@ -203,11 +203,11 @@ function DetailContent({
             </p>
           )}
 
-          {facts && tab === "fact" && facts.funFact && (
+          {facts && tab === "fact" && (facts.significance || facts.funFact) && (
             <div className="rounded-2xl border border-gold-400/20 bg-gradient-to-br from-gold-400/10 to-transparent p-5">
               <Sparkles className="h-5 w-5 text-gold-400" />
               <p className="mt-3 text-[15px] leading-relaxed text-white/85">
-                {facts.funFact}
+                {facts.significance ?? facts.funFact}
               </p>
             </div>
           )}
