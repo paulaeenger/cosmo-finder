@@ -9,6 +9,7 @@ import { useDeviceOrientation } from "@/hooks/useDeviceOrientation";
 import { useSkyObjects } from "@/hooks/useSkyObjects";
 import { useSatellites } from "@/hooks/useSatellites";
 import { useSkyFilters, categoryFor, type FilterCategory } from "@/hooks/useSkyFilters";
+import { useEquipment } from "@/hooks/useEquipment";
 import { useSkyConditions } from "@/hooks/useSkyConditions";
 
 import {
@@ -31,13 +32,16 @@ import { ObjectDetail } from "@/components/ObjectDetail";
 import { SatelliteAlert } from "@/components/SatelliteAlert";
 import { FilterBar } from "@/components/FilterBar";
 import { SkyConditionsBanner } from "@/components/SkyConditionsBanner";
+import { TimeScrubber } from "@/components/TimeScrubber";
 
 export default function HomePage() {
   const { position, error: geoError, loading: geoLoading, requestLocation } = useGeolocation();
   const { orientation, granted, error: orientationError, requestOrientation } = useDeviceOrientation();
   const { satellites } = useSatellites();
-  const { sky, now } = useSkyObjects(position, satellites);
+  const [viewTime, setViewTime] = useState<Date | null>(null);
+  const { sky, now } = useSkyObjects(position, satellites, viewTime);
   const { filters, toggle, reset, allOn } = useSkyFilters();
+  const { equipment, setEquipment, magLimit } = useEquipment();
 
   // FIRST: filter by what's physically visible right now (sky conditions).
   // Physics doesn't care about user preferences — daytime stars aren't
@@ -45,16 +49,30 @@ export default function HomePage() {
   const skyConditions = useSkyConditions(position, sky, now);
   const physicallyVisibleSky = skyConditions?.visibleSky ?? sky;
 
-  // SECOND: apply the user's category preferences on top of physical visibility.
-  // The Filter chip counts also reflect what's physically visible so the user
-  // sees "Stars 0" during the day rather than "Stars 138" of invisible stars.
-  const filteredSky = useMemo(
-    () => physicallyVisibleSky.filter((o) => filters[categoryFor(o.kind)]),
-    [physicallyVisibleSky, filters]
+  // SECOND: apply the equipment magnitude limit. Only stars and deep-sky
+  // objects are filtered — solar system bodies and satellites stay visible
+  // regardless of equipment because users care about them by category, not
+  // by brightness, and bright planets remain naked-eye anyway.
+  const equipmentFilteredSky = useMemo(
+    () =>
+      physicallyVisibleSky.filter((o) => {
+        if (o.kind !== "star" && o.kind !== "deep-sky") return true;
+        return o.mag <= magLimit;
+      }),
+    [physicallyVisibleSky, magLimit]
   );
 
-  // Counts per category — based on physically visible sky, so chip counts
-  // are honest about what's actually available to toggle on right now.
+  // THIRD: apply the user's category preferences. The Filter chip counts
+  // reflect what's physically visible AT current equipment level so the
+  // user sees "Stars 30" with binoculars rather than "Stars 138" of which
+  // they can't see any.
+  const filteredSky = useMemo(
+    () => equipmentFilteredSky.filter((o) => filters[categoryFor(o.kind)]),
+    [equipmentFilteredSky, filters]
+  );
+
+  // Counts per category — based on equipment-filtered sky, so chip counts
+  // are honest about what's actually available to see right now.
   const counts = useMemo(() => {
     const c: Record<FilterCategory, number> = {
       stars: 0,
@@ -63,9 +81,9 @@ export default function HomePage() {
       constellations: 0,
       satellites: 0,
     };
-    for (const o of physicallyVisibleSky) c[categoryFor(o.kind)]++;
+    for (const o of equipmentFilteredSky) c[categoryFor(o.kind)]++;
     return c;
-  }, [physicallyVisibleSky]);
+  }, [equipmentFilteredSky]);
 
   const [tracked, setTracked] = useState<SkyObject | null>(null);
   const [detail, setDetail] = useState<SkyObject | null>(null);
@@ -132,7 +150,18 @@ export default function HomePage() {
               />
             )}
 
-            <SatelliteAlert sky={filteredSky} onPick={(o) => setDetail(o)} />
+            <TimeScrubber
+              viewTime={now}
+              isLive={viewTime == null}
+              onChange={setViewTime}
+            />
+
+            <SatelliteAlert
+              sky={filteredSky}
+              isLive={viewTime == null}
+              viewTime={now}
+              onPick={(o) => setDetail(o)}
+            />
 
             <FilterBar
               filters={filters}
@@ -140,6 +169,8 @@ export default function HomePage() {
               onToggle={toggle}
               onReset={reset}
               allOn={allOn}
+              equipment={equipment}
+              onEquipmentChange={setEquipment}
             />
 
             <ViewToggle mode={viewMode} onChange={setViewMode} />
@@ -190,6 +221,10 @@ export default function HomePage() {
       {/* Detail modal — overlays everything */}
       <ObjectDetail
         object={detail}
+        observerLat={position?.lat ?? null}
+        observerLon={position?.lon ?? null}
+        now={now}
+        satellites={satellites}
         onClose={() => setDetail(null)}
         onTrack={(o) => {
           setTracked(o);

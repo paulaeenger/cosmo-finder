@@ -1,8 +1,18 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Star, Globe, Sparkles, Spline, Satellite as SatIcon } from "lucide-react";
+import {
+  Star,
+  Globe,
+  Sparkles,
+  Spline,
+  Satellite as SatIcon,
+  Eye,
+  Binoculars,
+  Telescope,
+} from "lucide-react";
 import type { FilterCategory, FilterState } from "@/hooks/useSkyFilters";
+import type { Equipment } from "@/hooks/useEquipment";
 
 type Props = {
   filters: FilterState;
@@ -10,9 +20,10 @@ type Props = {
   onToggle: (cat: FilterCategory) => void;
   onReset: () => void;
   allOn: boolean;
+  equipment: Equipment;
+  onEquipmentChange: (eq: Equipment) => void;
 };
 
-// Order matters — these are presented left-to-right.
 const CATEGORIES: Array<{
   id: FilterCategory;
   label: string;
@@ -25,13 +36,44 @@ const CATEGORIES: Array<{
   { id: "constellations", label: "Lines", icon: <Spline className="h-3.5 w-3.5" /> },
 ];
 
-export function FilterBar({ filters, counts, onToggle, onReset, allOn }: Props) {
+const EQUIPMENT_OPTIONS: Array<{ id: Equipment; label: string; icon: React.ReactNode; mag: string }> = [
+  { id: "eye", label: "Naked eye", icon: <Eye className="h-3.5 w-3.5" />, mag: "≤6" },
+  { id: "binoculars", label: "Binoculars", icon: <Binoculars className="h-3.5 w-3.5" />, mag: "≤9.5" },
+  { id: "telescope", label: "Telescope", icon: <Telescope className="h-3.5 w-3.5" />, mag: "all" },
+];
+
+export function FilterBar({
+  filters,
+  counts,
+  onToggle,
+  onReset,
+  allOn,
+  equipment,
+  onEquipmentChange,
+}: Props) {
   return (
     <section
-      aria-label="Sky object filters"
-      className="rounded-2xl border border-white/10 bg-white/[0.02] p-2"
+      aria-label="Sky filters"
+      className="rounded-2xl border border-white/10 bg-white/[0.02] p-2 space-y-2"
     >
-      {/* Horizontal scroll on narrow screens; flex-wrap on wider */}
+      {/* Equipment selector row */}
+      <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+        <div className="shrink-0 px-2 text-[9px] uppercase tracking-[0.2em] text-white/35 font-mono">
+          See with
+        </div>
+        {EQUIPMENT_OPTIONS.map((opt) => (
+          <EquipmentChip
+            key={opt.id}
+            icon={opt.icon}
+            label={opt.label}
+            magLabel={opt.mag}
+            active={equipment === opt.id}
+            onClick={() => onEquipmentChange(opt.id)}
+          />
+        ))}
+      </div>
+
+      {/* Category chips row */}
       <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
         {CATEGORIES.map((cat) => {
           const on = filters[cat.id];
@@ -48,7 +90,6 @@ export function FilterBar({ filters, counts, onToggle, onReset, allOn }: Props) 
           );
         })}
 
-        {/* Reset chip — only visible when at least one filter is off */}
         {!allOn && (
           <motion.button
             initial={{ opacity: 0, x: -4 }}
@@ -81,16 +122,11 @@ function FilterChip({
     <motion.button
       whileTap={{ scale: 0.94 }}
       onClick={onClick}
-      className={`
-        flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5
-        text-[11px] uppercase tracking-[0.15em] font-mono whitespace-nowrap
-        transition-colors
-        ${
-          active
-            ? "border-gold-400/40 bg-gold-400/12 text-gold-400"
-            : "border-white/10 bg-transparent text-white/35 hover:text-white/60"
-        }
-      `}
+      className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] uppercase tracking-[0.15em] font-mono whitespace-nowrap transition-colors ${
+        active
+          ? "border-gold-400/40 bg-gold-400/12 text-gold-400"
+          : "border-white/10 bg-transparent text-white/35 hover:text-white/60"
+      }`}
       aria-pressed={active}
       aria-label={`${active ? "Hide" : "Show"} ${label} (${count} visible)`}
     >
@@ -101,6 +137,39 @@ function FilterChip({
           {count}
         </span>
       )}
+    </motion.button>
+  );
+}
+
+function EquipmentChip({
+  icon,
+  label,
+  magLabel,
+  active,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  magLabel: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <motion.button
+      whileTap={{ scale: 0.94 }}
+      onClick={onClick}
+      className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] uppercase tracking-[0.15em] font-mono whitespace-nowrap transition-colors ${
+        active
+          ? "border-emerald-300/40 bg-emerald-300/8 text-emerald-200"
+          : "border-white/10 bg-transparent text-white/35 hover:text-white/60"
+      }`}
+      aria-pressed={active}
+    >
+      <span className={active ? "" : "opacity-50"}>{icon}</span>
+      <span>{label}</span>
+      <span className="text-[9px] opacity-60 normal-case tracking-normal">
+        {magLabel}
+      </span>
     </motion.button>
   );
 }

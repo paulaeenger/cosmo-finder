@@ -6,22 +6,30 @@ import type { Satellite } from "@/lib/astronomy/satellites";
 import type { GeoPosition } from "./useGeolocation";
 
 /**
- * Recomputes the visible-sky catalog whenever location changes or when the
- * tick advances. We use a fast tick (2s) because satellites move quickly —
- * the ISS crosses ~0.5° per second. Stars/planets recompute too but their
- * positions barely change at this scale; the cost is negligible.
+ * Recomputes the visible-sky catalog whenever location changes, time advances,
+ * or the user scrubs to a different time.
+ *
+ * `viewTime`: if non-null, computes sky for that specific time (frozen).
+ *             if null, ticks live every `refreshMs`.
+ *
+ * Why 2s tick: satellites move quickly — the ISS crosses ~0.5°/sec. Stars
+ * and planets recompute too but barely change at that cadence.
  */
 export function useSkyObjects(
   position: GeoPosition | null,
   satellites: Satellite[] = [],
+  viewTime: Date | null = null,
   refreshMs = 2_000
 ) {
-  const [now, setNow] = useState<Date>(() => new Date());
+  const [liveNow, setLiveNow] = useState<Date>(() => new Date());
 
   useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), refreshMs);
+    if (viewTime != null) return; // Don't tick when scrubbing
+    const id = setInterval(() => setLiveNow(new Date()), refreshMs);
     return () => clearInterval(id);
-  }, [refreshMs]);
+  }, [refreshMs, viewTime]);
+
+  const effectiveTime = viewTime ?? liveNow;
 
   const sky = useMemo<SkyObject[]>(() => {
     if (!position) return [];
@@ -29,11 +37,11 @@ export function useSkyObjects(
       {
         latitude: position.lat,
         longitude: position.lon,
-        date: now,
+        date: effectiveTime,
       },
       satellites
     );
-  }, [position, now, satellites]);
+  }, [position, effectiveTime, satellites]);
 
-  return { sky, now };
+  return { sky, now: effectiveTime, liveNow };
 }

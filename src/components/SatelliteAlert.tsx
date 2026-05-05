@@ -6,20 +6,31 @@ import type { SkyObject } from "@/lib/astronomy/matching";
 
 type Props = {
   sky: SkyObject[];
+  isLive?: boolean;
+  viewTime?: Date;
   onPick?: (obj: SkyObject) => void;
 };
 
 /**
  * Highlights any tracked satellite that is currently visible (above
- * horizon AND sunlit). These are time-sensitive — they'll be gone in
- * minutes — so we surface them at the top.
+ * horizon AND sunlit). When the user has scrubbed to a non-live time,
+ * the wording adapts: "would be visible" rather than "is visible now."
  */
-export function SatelliteAlert({ sky, onPick }: Props) {
+export function SatelliteAlert({ sky, isLive = true, viewTime, onPick }: Props) {
   const visible = sky.filter(
     (o) => o.kind === "satellite" && o.satellite?.lit && o.alt > 5
   );
 
   if (visible.length === 0) return null;
+
+  const headlinePrefix = isLive ? "Visible right now" : "Visible at this time";
+  const headline =
+    visible.length === 1
+      ? `${friendlyName(visible[0].name)} ${isLive ? "is overhead" : "would be overhead"}`
+      : `${visible.length} satellites ${isLive ? "are passing overhead" : "would be passing overhead"}`;
+  const subtext = isLive
+    ? "Sunlit and above the horizon. Look up — you can see them with your eyes."
+    : `Sunlit and above the horizon at ${viewTime?.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) ?? "this time"}.`;
 
   return (
     <AnimatePresence>
@@ -35,16 +46,10 @@ export function SatelliteAlert({ sky, onPick }: Props) {
           </div>
           <div className="flex-1">
             <p className="text-[10px] uppercase tracking-[0.3em] text-gold-400 font-mono">
-              Visible right now
+              {headlinePrefix}
             </p>
-            <p className="mt-1 font-display text-lg text-white">
-              {visible.length === 1
-                ? `${friendlyName(visible[0].name)} is overhead`
-                : `${visible.length} satellites are passing overhead`}
-            </p>
-            <p className="mt-1 text-[12px] text-white/60">
-              Sunlit and above the horizon. Look up — you can see them with your eyes.
-            </p>
+            <p className="mt-1 font-display text-lg text-white">{headline}</p>
+            <p className="mt-1 text-[12px] text-white/60">{subtext}</p>
 
             <div className="mt-3 space-y-1.5">
               {visible.map((s) => (
