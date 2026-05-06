@@ -1,18 +1,14 @@
 "use client";
-
 import { useMemo, useState } from "react";
 import { Search, X } from "lucide-react";
 import { searchSky, type SkyObject } from "@/lib/astronomy/matching";
-
 type Props = {
   sky: SkyObject[];
   onPick: (obj: SkyObject) => void;
 };
-
 export function SearchPanel({ sky, onPick }: Props) {
   const [q, setQ] = useState("");
   const results = useMemo(() => searchSky(sky, q), [sky, q]);
-
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-1.5">
       <div className="flex items-center gap-2 px-3 py-2">
@@ -29,12 +25,11 @@ export function SearchPanel({ sky, onPick }: Props) {
           </button>
         )}
       </div>
-
       {q && (
         <ul className="max-h-72 overflow-y-auto border-t border-white/5 py-1">
           {results.length === 0 ? (
             <li className="px-3 py-3 text-sm text-white/40">
-              Nothing in your current sky matches that name.
+              No objects in the catalog match that name.
             </li>
           ) : (
             results.map((r) => (
@@ -49,11 +44,13 @@ export function SearchPanel({ sky, onPick }: Props) {
                   <div>
                     <p className="text-sm text-white">{r.name}</p>
                     <p className="text-[11px] text-white/40 font-mono">
-                      {r.kind} · alt {r.alt.toFixed(0)}° · az {r.az.toFixed(0)}°
+                      {r.belowHorizon
+                        ? `${r.kind} · below horizon`
+                        : `${r.kind} · alt ${r.alt.toFixed(0)}° · az ${r.az.toFixed(0)}°`}
                     </p>
                   </div>
                   <span className="text-[11px] uppercase tracking-widest text-gold-400 font-mono">
-                    aim
+                    {r.belowHorizon ? "info" : "aim"}
                   </span>
                 </button>
               </li>

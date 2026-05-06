@@ -1,6 +1,5 @@
 // The matching engine: given an observer location, time, and phone-pointing
 // direction, return the most likely object the user is looking at.
-
 import {
   equatorialToHorizontal,
   angularDistance,
@@ -17,7 +16,6 @@ import brightStars from "../data/bright-stars.json";
 import extendedStars from "../data/extended-stars.json";
 import messier from "../data/messier.json";
 import constellations from "../data/constellations.json";
-
 export type SkyObjectKind =
   | "star"
   | "planet"
@@ -26,7 +24,6 @@ export type SkyObjectKind =
   | "deep-sky"
   | "constellation"
   | "satellite";
-
 export type SkyObject = {
   name: string;
   kind: SkyObjectKind;
@@ -35,31 +32,32 @@ export type SkyObject = {
   mag: number;
   alt: number;
   az: number;
+  belowHorizon?: boolean;
   constellation?: string;
   type?: string;
   distLy?: number;
   distAu?: number;
   bayer?: string;
   description?: string;
-
   // Satellite-only fields
   satellite?: SatellitePosition;
 };
-
 export type MatchResult = {
   object: SkyObject;
   separation: number; // degrees
 };
-
 export type Observer = {
   latitude: number;
   longitude: number;
   date: Date;
 };
-
 /**
- * Compute the alt/az of every object in the catalog for the given observer,
- * keeping only those above (or near) the horizon.
+ * Compute the alt/az of every object in the catalog for the given observer.
+ *
+ * Named objects (planets, Sun, Moon, named bright stars, Messier objects,
+ * constellations) are always included with a `belowHorizon: true` flag when
+ * they're under the horizon, so search can find them. Faint extended stars
+ * and satellites are excluded when below the horizon (they would be noise).
  */
 export function computeVisibleSky(
   observer: Observer,
@@ -67,8 +65,26 @@ export function computeVisibleSky(
   horizonMargin = -5
 ): SkyObject[] {
   const result: SkyObject[] = [];
-
-  const push = (raw: Omit<SkyObject, "alt" | "az">) => {
+  // Always include named objects, even when below the horizon.
+  // The `belowHorizon` flag lets consumers (search, TonightHighlights) decide
+  // whether to show or filter.
+  const pushAlways = (raw: Omit<SkyObject, "alt" | "az" | "belowHorizon">) => {
+    const h = equatorialToHorizontal(
+      { ra: raw.ra, dec: raw.dec },
+      observer.latitude,
+      observer.longitude,
+      observer.date
+    );
+    result.push({
+      ...raw,
+      alt: h.alt,
+      az: h.az,
+      belowHorizon: h.alt <= horizonMargin,
+    });
+  };
+  // Only include if visible. Used for the dense extended-stars catalog
+  // where we don't want hundreds of invisible faint stars in search.
+  const pushIfVisible = (raw: Omit<SkyObject, "alt" | "az" | "belowHorizon">) => {
     const h = equatorialToHorizontal(
       { ra: raw.ra, dec: raw.dec },
       observer.latitude,
@@ -76,11 +92,10 @@ export function computeVisibleSky(
       observer.date
     );
     if (h.alt > horizonMargin) {
-      result.push({ ...raw, alt: h.alt, az: h.az });
+      result.push({ ...raw, alt: h.alt, az: h.az, belowHorizon: false });
     }
   };
-
-  // Bright stars
+  // Bright stars — always included (named, useful for search)
   for (const s of brightStars as Array<{
     name: string;
     bayer: string;
@@ -90,7 +105,7 @@ export function computeVisibleSky(
     distLy: number;
     constellation: string;
   }>) {
-    push({
+    pushAlways({
       name: s.name,
       kind: "star",
       ra: s.ra,
@@ -102,9 +117,7 @@ export function computeVisibleSky(
       description: `${s.bayer} — a star in ${s.constellation}.`,
     });
   }
-
-  // Extended stars (unnamed/lesser-known stars used for filling out
-  // constellation patterns and creating a denser visual sky)
+  // Extended stars — only when visible (too many to clutter search)
   for (const s of extendedStars as Array<{
     name: string;
     ra: number;
@@ -112,7 +125,7 @@ export function computeVisibleSky(
     mag: number;
     constellation: string;
   }>) {
-    push({
+    pushIfVisible({
       name: s.name,
       kind: "star",
       ra: s.ra,
@@ -122,8 +135,7 @@ export function computeVisibleSky(
       description: `A star in ${s.constellation}.`,
     });
   }
-
-  // Messier deep-sky objects
+  // Messier deep-sky objects — always included
   for (const m of messier as Array<{
     id: string;
     name: string;
@@ -133,7 +145,7 @@ export function computeVisibleSky(
     mag: number;
     constellation: string;
   }>) {
-    push({
+    pushAlways({
       name: `${m.id} — ${m.name}`,
       kind: "deep-sky",
       ra: m.ra,
@@ -144,8 +156,7 @@ export function computeVisibleSky(
       description: `${m.type} in ${m.constellation}.`,
     });
   }
-
-  // Constellations (their central point)
+  // Constellations — always included
   for (const c of constellations as Array<{
     name: string;
     abbr: string;
@@ -154,7 +165,7 @@ export function computeVisibleSky(
     meaning: string;
     hemisphere: string;
   }>) {
-    push({
+    pushAlways({
       name: c.name,
       kind: "constellation",
       ra: c.ra,
@@ -164,13 +175,12 @@ export function computeVisibleSky(
       description: `${c.meaning} — a ${c.hemisphere.toLowerCase()} constellation.`,
     });
   }
-
-  // Sun, Moon, planets — computed live
+  // Sun, Moon, planets — always included
   const bodies = getSolarBodies(observer.date);
   for (const b of bodies) {
     const kind: SkyObject["kind"] =
       b.type === "Planet" ? "planet" : b.type === "Moon" ? "moon" : "sun";
-    push({
+    pushAlways({
       name: b.name,
       kind,
       ra: b.ra,
@@ -180,8 +190,7 @@ export function computeVisibleSky(
       description: b.description,
     });
   }
-
-  // Satellites — propagated live, included only if above the horizon
+  // Satellites — propagated live, only if above the horizon
   for (const sat of satellites) {
     const pos = propagateSatellite(
       sat,
@@ -189,7 +198,6 @@ export function computeVisibleSky(
       observer.date
     );
     if (!pos || pos.alt < horizonMargin) continue;
-
     result.push({
       name: sat.name,
       kind: "satellite",
@@ -197,18 +205,18 @@ export function computeVisibleSky(
       dec: 0,
       alt: pos.alt,
       az: pos.az,
+      belowHorizon: false,
       mag: estimateSatelliteMagnitude(pos),
       description: sat.description,
       type: sat.category,
       satellite: pos,
     });
   }
-
   return result;
 }
-
 /**
  * Find the closest object to a given pointing direction.
+ * Skips below-horizon objects, since the user can't aim at them.
  */
 export function findClosestObject(
   pointing: HorizontalCoord,
@@ -217,27 +225,23 @@ export function findClosestObject(
 ): MatchResult | null {
   const maxSep = options.maxSeparation ?? 180;
   let best: MatchResult | null = null;
-
   for (const obj of sky) {
+    if (obj.belowHorizon) continue;
     const sep = angularDistance(pointing, { alt: obj.alt, az: obj.az });
     if (sep > maxSep) continue;
-
     // Slight bias toward brighter / more interesting objects
     let score = sep + Math.max(0, obj.mag) * 0.2;
     if (obj.kind === "satellite" && obj.satellite?.lit) score -= 2;
     if (obj.kind === "planet") score -= 0.5;
-
     if (!best || score < best.separation) {
       best = { object: obj, separation: sep };
     }
   }
-
   return best;
 }
-
 export function rankTonight(sky: SkyObject[], limit = 8): SkyObject[] {
   return [...sky]
-    .filter((o) => o.alt > 10)
+    .filter((o) => !o.belowHorizon && o.alt > 10)
     .filter((o) => o.kind !== "constellation")
     .filter((o) => o.kind !== "satellite" || o.satellite?.lit)
     .map((o) => ({
@@ -253,7 +257,6 @@ export function rankTonight(sky: SkyObject[], limit = 8): SkyObject[] {
     .slice(0, limit)
     .map(({ o }) => o);
 }
-
 export function searchSky(sky: SkyObject[], query: string): SkyObject[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
@@ -264,9 +267,15 @@ export function searchSky(sky: SkyObject[], query: string): SkyObject[] {
         (o.constellation ?? "").toLowerCase().includes(q) ||
         (o.bayer ?? "").toLowerCase().includes(q)
     )
+    .sort((a, b) => {
+      // Visible first; among same visibility, brighter first
+      if (!!a.belowHorizon !== !!b.belowHorizon) {
+        return a.belowHorizon ? 1 : -1;
+      }
+      return a.mag - b.mag;
+    })
     .slice(0, 12);
 }
-
 /**
  * Compute the heading (in degrees) from one alt/az to another.
  * Used by the directional-arrow guide for off-screen objects.
