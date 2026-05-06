@@ -10,7 +10,7 @@
 // offline session has rich content for the famous objects (Saturn, Andromeda,
 // Orion Nebula, etc.).
 
-const VERSION = "v1";
+const VERSION = "v2";
 const APP_SHELL_CACHE = `cosmos-shell-${VERSION}`;
 const CATALOG_CACHE = `cosmos-catalog-${VERSION}`;
 const IMAGES_CACHE = `cosmos-images-${VERSION}`;
