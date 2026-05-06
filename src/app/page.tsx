@@ -1,9 +1,7 @@
 "use client";
-
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { MapPin, Compass, Clock } from "lucide-react";
-
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useDeviceOrientation } from "@/hooks/useDeviceOrientation";
 import { useSkyObjects } from "@/hooks/useSkyObjects";
@@ -11,7 +9,6 @@ import { useSatellites } from "@/hooks/useSatellites";
 import { useSkyFilters, categoryFor, type FilterCategory } from "@/hooks/useSkyFilters";
 import { useEquipment } from "@/hooks/useEquipment";
 import { useSkyConditions } from "@/hooks/useSkyConditions";
-
 import {
   findClosestObject,
   type SkyObject,
@@ -21,7 +18,6 @@ import {
   deviceToHorizontal,
   angularDistance,
 } from "@/lib/astronomy/coords";
-
 import { StartScanner } from "@/components/StartScanner";
 import { SkyCompass } from "@/components/SkyCompass";
 import { SkyView } from "@/components/SkyView";
@@ -34,7 +30,6 @@ import { FilterBar } from "@/components/FilterBar";
 import { SkyConditionsBanner } from "@/components/SkyConditionsBanner";
 import { TimeScrubber } from "@/components/TimeScrubber";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
-
 export default function HomePage() {
   const { position, error: geoError, loading: geoLoading, requestLocation } = useGeolocation();
   const { orientation, granted, error: orientationError, requestOrientation } = useDeviceOrientation();
@@ -43,13 +38,11 @@ export default function HomePage() {
   const { sky, now } = useSkyObjects(position, satellites, viewTime);
   const { filters, toggle, reset, allOn } = useSkyFilters();
   const { equipment, setEquipment, magLimit } = useEquipment();
-
   // FIRST: filter by what's physically visible right now (sky conditions).
   // Physics doesn't care about user preferences — daytime stars aren't
   // visible no matter how much the user wants them to be.
   const skyConditions = useSkyConditions(position, sky, now);
   const physicallyVisibleSky = skyConditions?.visibleSky ?? sky;
-
   // SECOND: apply the equipment magnitude limit. Only stars and deep-sky
   // objects are filtered — solar system bodies and satellites stay visible
   // regardless of equipment because users care about them by category, not
@@ -62,16 +55,22 @@ export default function HomePage() {
       }),
     [physicallyVisibleSky, magLimit]
   );
-
   // THIRD: apply the user's category preferences. The Filter chip counts
   // reflect what's physically visible AT current equipment level so the
   // user sees "Stars 30" with binoculars rather than "Stars 138" of which
   // they can't see any.
+  // NOTE: the "constellations" filter is applied to the SkyView render
+  // (lines + labels) instead of being filtered out of the catalog here,
+  // because constellation objects in the catalog don't carry the lines.
   const filteredSky = useMemo(
-    () => equipmentFilteredSky.filter((o) => filters[categoryFor(o.kind)]),
+    () =>
+      equipmentFilteredSky.filter((o) => {
+        const cat = categoryFor(o.kind);
+        if (cat === "constellations") return true; // SkyView decides via showConstellations
+        return filters[cat];
+      }),
     [equipmentFilteredSky, filters]
   );
-
   // Counts per category — based on equipment-filtered sky, so chip counts
   // are honest about what's actually available to see right now.
   const counts = useMemo(() => {
@@ -85,16 +84,23 @@ export default function HomePage() {
     for (const o of equipmentFilteredSky) c[categoryFor(o.kind)]++;
     return c;
   }, [equipmentFilteredSky]);
-
   const [tracked, setTracked] = useState<SkyObject | null>(null);
   const [detail, setDetail] = useState<SkyObject | null>(null);
   const [viewMode, setViewMode] = useState<"panoramic" | "instrument">("panoramic");
-
+  // Live vs Manual: in manual the gyroscope is paused and touch drives the view.
+  const [skyMode, setSkyMode] = useState<"live" | "manual">("live");
+  const [panOffset, setPanOffset] = useState<{ dAlt: number; dAz: number }>({
+    dAlt: 0,
+    dAz: 0,
+  });
+  // When switching back to live, reset the pan so the gyro takes over cleanly.
+  useEffect(() => {
+    if (skyMode === "live") setPanOffset({ dAlt: 0, dAz: 0 });
+  }, [skyMode]);
   const pointing = useMemo(
     () => deviceToHorizontal(orientation.alpha, orientation.beta),
     [orientation.alpha, orientation.beta]
   );
-
   // Match: closest object to phone direction, using the FILTERED sky so
   // turning off "stars" makes the app identify planets/satellites instead.
   // If user is tracking something explicit, resolve to its live alt/az from
@@ -110,22 +116,18 @@ export default function HomePage() {
     if (filteredSky.length === 0) return null;
     return findClosestObject(pointing, filteredSky, { maxSeparation: 25 });
   }, [pointing, sky, filteredSky, tracked]);
-
   // Auto-clear tracking if user gives up trying to find it
   useEffect(() => {
     if (tracked && match && match.separation > 60) {
       // Don't auto-clear — let the user manually dismiss. Tracking should be sticky.
     }
   }, [tracked, match]);
-
   // Live-update the tracked object reference so the detail modal stays current
   const liveTracked = useMemo(() => {
     if (!tracked) return null;
     return sky.find((o) => o.name === tracked.name) ?? tracked;
   }, [tracked, sky]);
-
   const ready = position && granted;
-
   return (
     <main className="min-h-screen text-white px-4 py-5 pb-12">
       <div className="mx-auto max-w-md space-y-5">
@@ -142,9 +144,7 @@ export default function HomePage() {
         ) : (
           <>
             <Header position={position} now={now} pointing={pointing} />
-
             <OfflineIndicator />
-
             {skyConditions && (
               <SkyConditionsBanner
                 conditions={skyConditions.conditions}
@@ -152,20 +152,17 @@ export default function HomePage() {
                 hiddenCount={skyConditions.hiddenAboveHorizon}
               />
             )}
-
             <TimeScrubber
               viewTime={now}
               isLive={viewTime == null}
               onChange={setViewTime}
             />
-
             <SatelliteAlert
               sky={filteredSky}
               isLive={viewTime == null}
               viewTime={now}
               onPick={(o) => setDetail(o)}
             />
-
             <FilterBar
               filters={filters}
               counts={counts}
@@ -173,9 +170,10 @@ export default function HomePage() {
               onReset={reset}
               allOn={allOn}
             />
-
             <ViewToggle mode={viewMode} onChange={setViewMode} />
-
+            {viewMode === "panoramic" && (
+              <SkyModeToggle mode={skyMode} onChange={setSkyMode} />
+            )}
             {viewMode === "panoramic" && position ? (
               <SkyView
                 pointing={pointing}
@@ -185,6 +183,10 @@ export default function HomePage() {
                 observerLat={position.lat}
                 observerLon={position.lon}
                 now={now}
+                showConstellations={filters.constellations}
+                mode={skyMode}
+                panOffset={panOffset}
+                onPanChange={setPanOffset}
               />
             ) : (
               <SkyCompass
@@ -194,15 +196,11 @@ export default function HomePage() {
                 onObjectTap={(o) => setDetail(o)}
               />
             )}
-
             <ObjectCard match={match} onOpenDetail={(o) => setDetail(o)} />
-
             {/* Search uses unfiltered sky — if you type "Saturn" you should
                 find it even when the planets filter is off. */}
             <SearchPanel sky={sky} onPick={(o) => setDetail(o)} />
-
             <TonightHighlights sky={filteredSky} onPick={(o) => setDetail(o)} />
-
             {tracked && (
               <motion.button
                 initial={{ opacity: 0 }}
@@ -213,12 +211,10 @@ export default function HomePage() {
                 Stop guiding to {shortName(tracked.name)} · resume auto-detect
               </motion.button>
             )}
-
             <Footer satCount={satellites.length} />
           </>
         )}
       </div>
-
       {/* Detail modal — overlays everything */}
       <ObjectDetail
         object={detail}
@@ -235,7 +231,6 @@ export default function HomePage() {
     </main>
   );
 }
-
 function Header({
   position,
   now,
@@ -268,7 +263,6 @@ function Header({
     </section>
   );
 }
-
 function Stat({ icon, value }: { icon: React.ReactNode; value: string }) {
   return (
     <div className="flex items-center gap-1.5 text-white/70">
@@ -277,19 +271,16 @@ function Stat({ icon, value }: { icon: React.ReactNode; value: string }) {
     </div>
   );
 }
-
 function cardinal(az: number) {
   const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
   return dirs[Math.round(((az % 360) / 45)) % 8];
 }
-
 function shortName(name: string) {
   if (name.length <= 14) return name;
   if (name.includes("—")) return name.split("—")[0].trim();
   if (name.includes("(")) return name.split(" ")[0];
   return name.slice(0, 13) + "…";
 }
-
 function Footer({ satCount }: { satCount: number }) {
   return (
     <p className="pt-2 text-center text-[10px] uppercase tracking-[0.3em] text-white/25 font-mono">
@@ -297,7 +288,6 @@ function Footer({ satCount }: { satCount: number }) {
     </p>
   );
 }
-
 function ViewToggle({
   mode,
   onChange,
@@ -322,7 +312,30 @@ function ViewToggle({
     </div>
   );
 }
-
+function SkyModeToggle({
+  mode,
+  onChange,
+}: {
+  mode: "live" | "manual";
+  onChange: (m: "live" | "manual") => void;
+}) {
+  return (
+    <div className="flex gap-1 rounded-full border border-white/10 bg-white/[0.03] p-1">
+      <ToggleOption
+        active={mode === "live"}
+        onClick={() => onChange("live")}
+        label="Live"
+        sub="Follows phone"
+      />
+      <ToggleOption
+        active={mode === "manual"}
+        onClick={() => onChange("manual")}
+        label="Manual"
+        sub="Drag to look"
+      />
+    </div>
+  );
+}
 function ToggleOption({
   active,
   onClick,

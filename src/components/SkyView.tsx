@@ -1,11 +1,9 @@
 "use client";
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import type { SkyObject } from "@/lib/astronomy/matching";
 import { project } from "@/lib/astronomy/projection";
 import constellationLines from "@/lib/data/constellation-lines.json";
-
 type Props = {
   pointing: { alt: number; az: number } | null;
   sky: SkyObject[];
@@ -15,8 +13,15 @@ type Props = {
   observerLon: number;
   now: Date;
   fovDeg?: number;
+  /** When false, hide constellation lines AND constellation name labels. */
+  showConstellations?: boolean;
+  /** "live" follows the gyro; "manual" lets the user pan with touch. */
+  mode?: "live" | "manual";
+  /** Pan offset (degrees) applied on top of pointing in manual mode. */
+  panOffset?: { dAlt: number; dAz: number };
+  /** Called when the user drags in manual mode. Delta in degrees. */
+  onPanChange?: (delta: { dAlt: number; dAz: number }) => void;
 };
-
 /**
  * Full-screen panoramic sky renderer (v2).
  *
@@ -43,10 +48,13 @@ export function SkyView({
   observerLon,
   now,
   fovDeg = 90,
+  showConstellations = true,
+  mode = "live",
+  panOffset = { dAlt: 0, dAz: 0 },
+  onPanChange,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ w: 360, h: 600 });
-
   // Twinkle phase advances every 2s — slow enough that motion is gentle
   // but fast enough that the sky feels alive.
   const [twinklePhase, setTwinklePhase] = useState(0);
@@ -54,7 +62,6 @@ export function SkyView({
     const id = setInterval(() => setTwinklePhase((p) => p + 1), 2000);
     return () => clearInterval(id);
   }, []);
-
   // Track container size for responsive rendering
   useEffect(() => {
     if (!containerRef.current) return;
@@ -65,22 +72,91 @@ export function SkyView({
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
-
+  // ============ Touch/drag handlers for manual pan mode ============
+  // We track the last touch position so we can compute delta-x / delta-y
+  // and convert pixel motion into degrees of pan. We also track whether
+  // the touch has moved enough to be a "drag" rather than a "tap" — this
+  // is how we still let the user tap a star to open its detail in manual.
+  const touchStateRef = useRef<{
+    startX: number;
+    startY: number;
+    lastX: number;
+    lastY: number;
+    moved: boolean;
+  } | null>(null);
+  const TAP_THRESHOLD_PX = 8;
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (mode !== "manual") return;
+    const t = e.touches[0];
+    if (!t) return;
+    touchStateRef.current = {
+      startX: t.clientX,
+      startY: t.clientY,
+      lastX: t.clientX,
+      lastY: t.clientY,
+      moved: false,
+    };
+  };
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (mode !== "manual") return;
+    const state = touchStateRef.current;
+    const t = e.touches[0];
+    if (!state || !t || !onPanChange) return;
+    const dxPx = t.clientX - state.lastX;
+    const dyPx = t.clientY - state.lastY;
+    // Mark as moved once we've passed the tap threshold
+    const totalDx = Math.abs(t.clientX - state.startX);
+    const totalDy = Math.abs(t.clientY - state.startY);
+    if (totalDx + totalDy > TAP_THRESHOLD_PX) {
+      state.moved = true;
+      // Prevent page scroll while dragging the sky
+      e.preventDefault();
+    }
+    if (state.moved) {
+      // Convert pixels to degrees using the field of view.
+      // Horizontal: width pixels = fovDeg degrees of azimuth.
+      // Vertical: same scaling for altitude (dragging up looks up).
+      const degPerPx = fovDeg / size.w;
+      // Drag right → camera looks left (decrease az).
+      // Drag down → camera looks up (increase alt).
+      onPanChange({
+        dAlt: panOffset.dAlt + dyPx * degPerPx,
+        dAz: panOffset.dAz - dxPx * degPerPx,
+      });
+      state.lastX = t.clientX;
+      state.lastY = t.clientY;
+    }
+  };
+  const handleTouchEnd = () => {
+    // Reset; the parent retains the latest panOffset.
+    touchStateRef.current = null;
+  };
+  // Whether to swallow object-tap events because the user is dragging,
+  // not tapping. We pass this via a closure to each tap handler below.
+  const wasDragRef = useRef(false);
+  const handleTouchEndCapture = (e: React.TouchEvent) => {
+    const state = touchStateRef.current;
+    wasDragRef.current = !!(state && state.moved);
+  };
+  const tapIfNotDragging = (cb: () => void) => () => {
+    if (wasDragRef.current) {
+      wasDragRef.current = false;
+      return;
+    }
+    cb();
+  };
   const sunAlt = useMemo(
     () => sunAltitude(observerLat, observerLon, now),
     [observerLat, observerLon, now]
   );
-
   const skyGradient = useMemo(() => skyColors(sunAlt), [sunAlt]);
   // Visibility coefficient — fades stars/lines/MW out during the day
   const darkness = useMemo(() => darknessOf(sunAlt), [sunAlt]);
-
   const starByName = useMemo(() => {
     const m = new Map<string, SkyObject>();
     for (const o of sky) if (o.kind === "star") m.set(o.name, o);
     return m;
   }, [sky]);
-
   if (!pointing) {
     return (
       <div
@@ -95,18 +171,21 @@ export function SkyView({
       </div>
     );
   }
-
+  // Effective viewing direction — gyro pointing with manual pan applied
+  const view = {
+    alt: Math.max(-89, Math.min(89, pointing.alt + panOffset.dAlt)),
+    az: ((pointing.az + panOffset.dAz) % 360 + 360) % 360,
+  };
   // Project all visible objects
   type Projected = { obj: SkyObject; x: number; y: number };
   const projected: Projected[] = [];
   for (const obj of sky) {
     if (obj.alt < -2) continue;
-    const p = project(obj.alt, obj.az, pointing.alt, pointing.az, fovDeg, size.w, size.h);
+    const p = project(obj.alt, obj.az, view.alt, view.az, fovDeg, size.w, size.h);
     if (!p.visible) continue;
     if (p.x < -50 || p.x > size.w + 50 || p.y < -50 || p.y > size.h + 50) continue;
     projected.push({ obj, x: p.x, y: p.y });
   }
-
   // Project constellation line endpoints
   const lineSegments: Array<{ a: { x: number; y: number }; b: { x: number; y: number } }> = [];
   for (const c of constellationLines as Array<{
@@ -118,19 +197,17 @@ export function SkyView({
       const b = starByName.get(bName);
       if (!a || !b) continue;
       if (a.alt < -2 || b.alt < -2) continue;
-      const pa = project(a.alt, a.az, pointing.alt, pointing.az, fovDeg, size.w, size.h);
-      const pb = project(b.alt, b.az, pointing.alt, pointing.az, fovDeg, size.w, size.h);
+      const pa = project(a.alt, a.az, view.alt, view.az, fovDeg, size.w, size.h);
+      const pb = project(b.alt, b.az, view.alt, view.az, fovDeg, size.w, size.h);
       if (!pa.visible || !pb.visible) continue;
       lineSegments.push({ a: { x: pa.x, y: pa.y }, b: { x: pb.x, y: pb.y } });
     }
   }
-
   // Horizon points (sample every 2°)
   const horizonPoints: Array<{ x: number; y: number; visible: boolean }> = [];
   for (let az = 0; az < 360; az += 2) {
-    horizonPoints.push(project(0, az, pointing.alt, pointing.az, fovDeg, size.w, size.h));
+    horizonPoints.push(project(0, az, view.alt, view.az, fovDeg, size.w, size.h));
   }
-
   const cardinals = [
     { label: "N", az: 0 },
     { label: "E", az: 90 },
@@ -138,29 +215,31 @@ export function SkyView({
     { label: "W", az: 270 },
   ].map((c) => ({
     label: c.label,
-    p: project(0, c.az, pointing.alt, pointing.az, fovDeg, size.w, size.h),
+    p: project(0, c.az, view.alt, view.az, fovDeg, size.w, size.h),
   }));
-
   // Altitude rings (every 30°: 30, 60, zenith)
   const altRings: Array<Array<{ x: number; y: number; visible: boolean }>> = [];
   for (const ringAlt of [30, 60]) {
     const pts: Array<{ x: number; y: number; visible: boolean }> = [];
     for (let az = 0; az < 360; az += 4) {
-      pts.push(project(ringAlt, az, pointing.alt, pointing.az, fovDeg, size.w, size.h));
+      pts.push(project(ringAlt, az, view.alt, view.az, fovDeg, size.w, size.h));
     }
     altRings.push(pts);
   }
-
   // Ecliptic line (sample at multiple RAs converted to alt/az for current time)
-  const ecliptic = computeEclipticPath(observerLat, observerLon, now, pointing, fovDeg, size.w, size.h);
-
+  const ecliptic = computeEclipticPath(observerLat, observerLon, now, view, fovDeg, size.w, size.h);
   return (
     <div
       ref={containerRef}
       className="relative h-[60vh] w-full overflow-hidden rounded-3xl border border-white/10"
       style={{
         background: `linear-gradient(180deg, ${skyGradient.top} 0%, ${skyGradient.middle} 60%, ${skyGradient.bottom} 100%)`,
+        touchAction: mode === "manual" ? "none" : "auto",
       }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchEndCapture={handleTouchEndCapture}
     >
       <svg
         viewBox={`0 0 ${size.w} ${size.h}`}
@@ -201,20 +280,17 @@ export function SkyView({
             <stop offset="0%" stopColor="rgba(255,200,100,0.75)" />
             <stop offset="100%" stopColor="rgba(255,200,100,0)" />
           </radialGradient>
-
           {/* Milky Way diffuse glow */}
           <radialGradient id="milkyWayCloud" cx="50%" cy="50%" r="50%">
             <stop offset="0%" stopColor="rgba(255,250,240,0.18)" />
             <stop offset="60%" stopColor="rgba(220,210,230,0.06)" />
             <stop offset="100%" stopColor="rgba(220,210,230,0)" />
           </radialGradient>
-
           {/* Soft horizon fade — used as a mask gradient for ground silhouette */}
           <linearGradient id="horizonFade" x1="0%" y1="0%" x2="0%" y2="100%">
             <stop offset="0%" stopColor="rgba(0,0,0,0)" />
             <stop offset="100%" stopColor="rgba(0,0,0,0.55)" />
           </linearGradient>
-
           {/* Glow filter for constellation lines */}
           <filter id="lineGlow">
             <feGaussianBlur stdDeviation="0.7" />
@@ -224,33 +300,29 @@ export function SkyView({
             </feMerge>
           </filter>
         </defs>
-
         {/* Milky Way — only when sky is dark enough */}
         {darkness > 0.4 && (
           <MilkyWayBand
             observerLat={observerLat}
             observerLon={observerLon}
             now={now}
-            pointing={pointing}
+            pointing={view}
             fovDeg={fovDeg}
             screenW={size.w}
             screenH={size.h}
             opacity={darkness}
           />
         )}
-
         {/* Atmospheric background starfield (faint, fixed positions per session) */}
         {darkness > 0.35 && (
           <BackgroundStarfield width={size.w} height={size.h} opacity={darkness * 0.7} />
         )}
-
         {/* Altitude reference rings */}
         <g opacity={0.18} stroke="rgba(232,196,116,0.5)" strokeWidth="0.4" strokeDasharray="3 5" fill="none">
           {altRings.map((ring, i) => (
             <ReferenceRing key={i} points={ring} />
           ))}
         </g>
-
         {/* Ecliptic line */}
         {ecliptic.length > 1 && (
           <polyline
@@ -261,30 +333,29 @@ export function SkyView({
             strokeDasharray="2 4"
           />
         )}
-
-        {/* Constellation lines — only visible at night */}
-        <g
-          opacity={Math.max(0, (darkness - 0.3) * 1.4)}
-          stroke="#9bb1d8"
-          strokeWidth="0.7"
-          fill="none"
-          filter="url(#lineGlow)"
-        >
-          {lineSegments.map((seg, i) => (
-            <line
-              key={i}
-              x1={seg.a.x}
-              y1={seg.a.y}
-              x2={seg.b.x}
-              y2={seg.b.y}
-              strokeLinecap="round"
-            />
-          ))}
-        </g>
-
+        {/* Constellation lines — only when toggled on AND visible at night */}
+        {showConstellations && (
+          <g
+            opacity={Math.max(0, (darkness - 0.3) * 1.4)}
+            stroke="#9bb1d8"
+            strokeWidth="0.7"
+            fill="none"
+            filter="url(#lineGlow)"
+          >
+            {lineSegments.map((seg, i) => (
+              <line
+                key={i}
+                x1={seg.a.x}
+                y1={seg.a.y}
+                x2={seg.b.x}
+                y2={seg.b.y}
+                strokeLinecap="round"
+              />
+            ))}
+          </g>
+        )}
         {/* Horizon — soft band rather than hard line */}
         <HorizonBand points={horizonPoints} screenH={size.h} />
-
         {/* Cardinal direction labels */}
         {cardinals.map(
           (c) =>
@@ -304,7 +375,6 @@ export function SkyView({
               </g>
             )
         )}
-
         {/* Stars */}
         {projected
           .filter((p) => p.obj.kind === "star")
@@ -315,16 +385,14 @@ export function SkyView({
             // Twinkle: phase derived from name + global phase
             const twinkle = twinkleAmount(p.obj.name, twinklePhase, p.obj.mag);
             const radius = meta.r * twinkle.scale;
-
             return (
               <g
                 key={`star-${p.obj.name}-${i}`}
-                onClick={() => onObjectTap?.(p.obj)}
+                onClick={tapIfNotDragging(() => onObjectTap?.(p.obj))}
                 style={{ cursor: onObjectTap ? "pointer" : "default" }}
               >
                 {/* Tap target — generous hit area */}
                 <circle cx={p.x} cy={p.y} r={Math.max(12, radius * 6)} fill="transparent" />
-
                 {/* Soft halo for naked-eye-bright stars */}
                 {meta.r > 1.2 && (
                   <circle
@@ -335,7 +403,6 @@ export function SkyView({
                     opacity={twinkle.glow * darkness}
                   />
                 )}
-
                 {/* Tracked highlight ring */}
                 {isTracked && (
                   <circle
@@ -348,7 +415,6 @@ export function SkyView({
                     opacity={0.9}
                   />
                 )}
-
                 {/* Diffraction spike for very bright stars only */}
                 {meta.r >= 2.5 && darkness > 0.5 && (
                   <g opacity={twinkle.glow * 0.5}>
@@ -370,7 +436,6 @@ export function SkyView({
                     />
                   </g>
                 )}
-
                 {/* The star itself */}
                 <circle
                   cx={p.x}
@@ -379,7 +444,6 @@ export function SkyView({
                   fill={meta.color}
                   opacity={Math.min(1, darkness * 1.2 + 0.05)}
                 />
-
                 {/* Bright inner core */}
                 {meta.r > 1.5 && (
                   <circle
@@ -390,7 +454,6 @@ export function SkyView({
                     opacity={0.85 * darkness}
                   />
                 )}
-
                 {/* Label */}
                 {labelable && darkness > 0.3 && (
                   <text
@@ -406,7 +469,6 @@ export function SkyView({
               </g>
             );
           })}
-
         {/* Sun, Moon, planets */}
         {projected
           .filter(
@@ -421,11 +483,10 @@ export function SkyView({
             const r = isSun ? 9 : isMoon ? 8 : 4.5;
             const fill = isSun ? "#ffd76a" : isMoon ? "#dde3ee" : "#f59e63";
             const glowId = isSun ? "moonGlow" : isMoon ? "moonGlow" : "planetGlow";
-
             return (
               <g
                 key={`body-${p.obj.name}-${i}`}
-                onClick={() => onObjectTap?.(p.obj)}
+                onClick={tapIfNotDragging(() => onObjectTap?.(p.obj))}
                 style={{ cursor: "pointer" }}
               >
                 <circle cx={p.x} cy={p.y} r={Math.max(14, r * 3)} fill="transparent" />
@@ -451,7 +512,6 @@ export function SkyView({
               </g>
             );
           })}
-
         {/* Satellites */}
         {projected
           .filter((p) => p.obj.kind === "satellite")
@@ -461,7 +521,7 @@ export function SkyView({
             return (
               <g
                 key={`sat-${p.obj.name}-${i}`}
-                onClick={() => onObjectTap?.(p.obj)}
+                onClick={tapIfNotDragging(() => onObjectTap?.(p.obj))}
                 style={{ cursor: "pointer" }}
               >
                 <circle cx={p.x} cy={p.y} r={14} fill="transparent" />
@@ -502,14 +562,13 @@ export function SkyView({
               </g>
             );
           })}
-
         {/* Deep-sky tagged with small markers (only when their constellation is up) */}
         {projected
           .filter((p) => p.obj.kind === "deep-sky")
           .map((p, i) => (
             <g
               key={`ds-${p.obj.name}-${i}`}
-              onClick={() => onObjectTap?.(p.obj)}
+              onClick={tapIfNotDragging(() => onObjectTap?.(p.obj))}
               style={{ cursor: "pointer" }}
               opacity={darkness}
             >
@@ -517,41 +576,39 @@ export function SkyView({
               <circle cx={p.x} cy={p.y} r={3.2} fill="none" stroke="rgba(155,180,255,0.7)" strokeWidth="0.7" strokeDasharray="1.5 1.5" />
             </g>
           ))}
-
-        {/* Constellation name labels — placed at constellation centroids */}
-        <ConstellationLabels
-          starByName={starByName}
-          pointing={pointing}
-          fovDeg={fovDeg}
-          screenW={size.w}
-          screenH={size.h}
-          darkness={darkness}
-        />
+        {/* Constellation name labels — placed at constellation centroids
+            Only render when constellations are toggled on. */}
+        {showConstellations && (
+          <ConstellationLabels
+            starByName={starByName}
+            pointing={view}
+            fovDeg={fovDeg}
+            screenW={size.w}
+            screenH={size.h}
+            darkness={darkness}
+          />
+        )}
       </svg>
-
       {/* Compass + day/night status pill */}
       <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
         <div className="rounded-full bg-black/35 backdrop-blur-sm px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] font-mono text-white/80">
-          {cardinal(pointing.az)} {pointing.az.toFixed(0)}°
+          {cardinal(view.az)} {view.az.toFixed(0)}°
           <span className="text-white/40 mx-1.5">·</span>
-          alt {pointing.alt.toFixed(0)}°
+          alt {view.alt.toFixed(0)}°
         </div>
         <div className="rounded-full bg-black/35 backdrop-blur-sm px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] font-mono text-white/80">
-          {phaseLabel(sunAlt)}
+          {mode === "manual" ? "MANUAL" : phaseLabel(sunAlt)}
         </div>
       </div>
     </div>
   );
 }
-
 // ============ Star metadata (color + size + halo) ============
-
 type StarMeta = {
   color: string;
   haloKey: "Blue" | "White" | "Yellow" | "Orange" | "Red";
   r: number; // base radius
 };
-
 const SPECTRAL_TYPES: Record<string, "O" | "B" | "A" | "F" | "G" | "K" | "M"> = {
   Sirius: "A", Vega: "A", Rigel: "B", Spica: "B",
   Betelgeuse: "M", Antares: "M", Aldebaran: "K",
@@ -564,7 +621,6 @@ const SPECTRAL_TYPES: Record<string, "O" | "B" | "A" | "F" | "G" | "K" | "M"> = 
   Shaula: "B", Wezen: "F", Kaus: "B", Mirfak: "F",
   "Rigil Kentaurus": "G", Fomalhaut: "A",
 };
-
 const SPECTRAL_COLORS: Record<string, { color: string; haloKey: StarMeta["haloKey"] }> = {
   O: { color: "#a8c0ff", haloKey: "Blue" },
   B: { color: "#bcd3ff", haloKey: "Blue" },
@@ -574,7 +630,6 @@ const SPECTRAL_COLORS: Record<string, { color: string; haloKey: StarMeta["haloKe
   K: { color: "#ffc77a", haloKey: "Orange" },
   M: { color: "#ff8c5a", haloKey: "Red" },
 };
-
 function starMetaFor(name: string, mag: number): StarMeta {
   const spectral = SPECTRAL_TYPES[name] ?? "A";
   const palette = SPECTRAL_COLORS[spectral];
@@ -583,7 +638,6 @@ function starMetaFor(name: string, mag: number): StarMeta {
   const r = Math.max(0.6, 3.4 - mag * 0.6);
   return { ...palette, r };
 }
-
 // Twinkle: deterministic per-star "sparkle" that varies subtly with the
 // global phase counter. Brighter stars twinkle more (lower-altitude effect).
 function twinkleAmount(name: string, phase: number, mag: number): { scale: number; glow: number } {
@@ -595,9 +649,7 @@ function twinkleAmount(name: string, phase: number, mag: number): { scale: numbe
   const intensity = mag < 1 ? 0.06 : mag < 2.5 ? 0.04 : 0.02;
   return { scale: 1 + wob * intensity, glow: 0.5 + wob * 0.15 + 0.45 };
 }
-
 // ============ Sky color & darkness ============
-
 function skyColors(sunAlt: number): { top: string; middle: string; bottom: string } {
   if (sunAlt > 5) {
     return { top: "#5b8ec9", middle: "#86b1d6", bottom: "#bdd5ea" };
@@ -616,7 +668,6 @@ function skyColors(sunAlt: number): { top: string; middle: string; bottom: strin
   }
   return { top: "#02030a", middle: "#03050d", bottom: "#050810" };
 }
-
 /** Returns a 0..1 darkness coefficient. 0 = midday, 1 = astronomical night. */
 function darknessOf(sunAlt: number): number {
   if (sunAlt > 0) return 0.05;
@@ -625,7 +676,6 @@ function darknessOf(sunAlt: number): number {
   if (sunAlt > -18) return 0.70 + ((-sunAlt - 12) / 6) * 0.25; // astronomical: 0.70 → 0.95
   return 1.0;
 }
-
 function phaseLabel(sunAlt: number): string {
   if (sunAlt > 5) return "Day";
   if (sunAlt > 0) return "Setting";
@@ -634,7 +684,6 @@ function phaseLabel(sunAlt: number): string {
   if (sunAlt > -18) return "Late Twilight";
   return "Night";
 }
-
 function sunAltitude(lat: number, lon: number, date: Date): number {
   // Low-precision Sun position; good enough for sky-color shading.
   const jd = date.getTime() / 86400000 + 2440587.5;
@@ -645,34 +694,27 @@ function sunAltitude(lat: number, lon: number, date: Date): number {
   const eps = 23.439 * (Math.PI / 180);
   const ra = Math.atan2(Math.cos(eps) * Math.sin(lambda), Math.cos(lambda));
   const dec = Math.asin(Math.sin(eps) * Math.sin(lambda));
-
   const T = (jd - 2451545.0) / 36525.0;
   let gmst = 280.46061837 + 360.98564736629 * (jd - 2451545.0) + 0.000387933 * T * T;
   gmst = ((gmst % 360) + 360) % 360;
   const lst = (gmst + lon) * (Math.PI / 180);
   const ha = lst - ra;
-
   const latRad = lat * (Math.PI / 180);
   const sinAlt = Math.sin(dec) * Math.sin(latRad) + Math.cos(dec) * Math.cos(latRad) * Math.cos(ha);
   return Math.asin(Math.max(-1, Math.min(1, sinAlt))) * (180 / Math.PI);
 }
-
 // ============ Misc helpers ============
-
 function cardinal(az: number): string {
   const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
   return dirs[Math.round(((az % 360) / 45)) % 8];
 }
-
 function satShortName(name: string): string {
   if (name === "ISS (ZARYA)") return "ISS";
   if (name === "TIANGONG") return "Tiangong";
   if (name === "HST") return "Hubble";
   return name;
 }
-
 // ============ Sub-components ============
-
 function HorizonBand({
   points,
   screenH,
@@ -700,7 +742,6 @@ function HorizonBand({
     </g>
   );
 }
-
 function ReferenceRing({
   points,
 }: {
@@ -728,7 +769,6 @@ function ReferenceRing({
     </>
   );
 }
-
 function MilkyWayBand({
   observerLat,
   observerLon,
@@ -754,27 +794,16 @@ function MilkyWayBand({
   // We render a rough band as a series of fuzzy circles along the plane.
   // This is a visual approximation — not scientifically precise placement,
   // but accurate enough to give the right impression in the right region.
-
-  // Sample points along the galactic plane in equatorial coords, then
-  // convert each to alt/az via the same machinery the real catalog uses.
-  // For simplicity we approximate the band by sampling RA from 0 to 24h
-  // and computing a Dec from the inclination.
   const points: Array<{ x: number; y: number; alpha: number }> = [];
-
   const galacticPoleRA = 12.86; // hours
   const galacticPoleDec = 27.13; // degrees
   for (let l = 0; l < 360; l += 8) {
-    // Galactic longitude → equatorial coords (approximate)
     const lRad = l * (Math.PI / 180);
     const decGalPole = galacticPoleDec * (Math.PI / 180);
     const raGalPole = galacticPoleRA * 15 * (Math.PI / 180);
-
-    // For points on galactic equator (b=0)
-    const sinDec = -Math.cos(decGalPole) * Math.cos(lRad - 0); // simplified
+    const sinDec = -Math.cos(decGalPole) * Math.cos(lRad - 0);
     const dec = Math.asin(Math.max(-1, Math.min(1, sinDec)));
     const ra = raGalPole + Math.atan2(Math.sin(lRad), Math.cos(lRad) * Math.sin(decGalPole));
-
-    // Equatorial → horizontal
     const altAz = eqToAltAz(
       ra * (12 / Math.PI),
       dec * (180 / Math.PI),
@@ -783,16 +812,13 @@ function MilkyWayBand({
       now
     );
     if (altAz.alt < -5) continue;
-
     const p = project(altAz.alt, altAz.az, pointing.alt, pointing.az, fovDeg, screenW, screenH);
     if (!p.visible) continue;
     if (p.x < -100 || p.x > screenW + 100 || p.y < -100 || p.y > screenH + 100) continue;
-    // Brighter near galactic center (Sagittarius region, l ≈ 0)
     const distFromCenter = Math.min(l, 360 - l);
     const alpha = Math.max(0.2, 1 - distFromCenter / 90);
     points.push({ x: p.x, y: p.y, alpha });
   }
-
   return (
     <g opacity={opacity}>
       {points.map((p, i) => (
@@ -808,7 +834,6 @@ function MilkyWayBand({
     </g>
   );
 }
-
 function BackgroundStarfield({
   width,
   height,
@@ -836,7 +861,6 @@ function BackgroundStarfield({
     }
     return out;
   }, [width, height]);
-
   return (
     <g opacity={opacity}>
       {stars.map((s, i) => (
@@ -845,7 +869,6 @@ function BackgroundStarfield({
     </g>
   );
 }
-
 function ConstellationLabels({
   starByName,
   pointing,
@@ -862,9 +885,15 @@ function ConstellationLabels({
   darkness: number;
 }) {
   if (darkness < 0.4) return null;
-  // Place constellation name near the centroid of its stars
+  // Place constellation name near the centroid of its stars.
+  // We dedupe by constellation name to fix the bug where every star with
+  // a "constellation" field was producing its own label, stacking 5+ "LYRA"
+  // labels on top of each other.
+  const seen = new Set<string>();
   const labels: Array<{ name: string; x: number; y: number }> = [];
   for (const c of constellationLines as Array<{ constellation: string; lines: [string, string][] }>) {
+    if (seen.has(c.constellation)) continue;
+    seen.add(c.constellation);
     const stars = new Set<string>();
     for (const [a, b] of c.lines) {
       stars.add(a);
@@ -883,7 +912,6 @@ function ConstellationLabels({
     const cy = points.reduce((a, p) => a + p.y, 0) / points.length;
     labels.push({ name: c.constellation, x: cx, y: cy });
   }
-
   return (
     <g opacity={darkness * 0.5}>
       {labels.map((l) => (
@@ -907,9 +935,7 @@ function ConstellationLabels({
     </g>
   );
 }
-
 // ============ Equatorial → horizontal helper ============
-
 function eqToAltAz(
   raHours: number,
   decDeg: number,
@@ -936,7 +962,6 @@ function eqToAltAz(
   if (az < 0) az += 360;
   return { alt, az };
 }
-
 function computeEclipticPath(
   lat: number,
   lon: number,
