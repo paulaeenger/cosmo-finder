@@ -69,7 +69,7 @@ export function computeRiseSetSolarBody(
   const samples: Array<{ time: Date; alt: number }> = [];
   for (let m = 0; m <= 24 * 60; m += 10) {
     const t = new Date(start.getTime() + m * 60_000);
-    const bodies = getSolarBodies(t);
+    const bodies = getSolarBodies(t, observerLat, observerLon);
     const body = bodies.find((b) => b.name === bodyName);
     if (!body) return null;
     const h = equatorialToHorizontal(
@@ -165,7 +165,7 @@ export function sampleAltitudeCurveSolarBody(
   const out: Array<{ time: Date; alt: number; az: number }> = [];
   for (let m = 0; m <= 24 * 60; m += 15) {
     const t = new Date(start.getTime() + m * 60_000);
-    const bodies = getSolarBodies(t);
+    const bodies = getSolarBodies(t, observerLat, observerLon);
     const body = bodies.find((b) => b.name === bodyName);
     if (!body) return null;
     const h = equatorialToHorizontal(

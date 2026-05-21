@@ -194,7 +194,7 @@ export function computeStaticSky(
     });
   }
   // Sun, Moon, planets — always included
-  const bodies = getSolarBodies(observer.date);
+  const bodies = getSolarBodies(observer.date, observer.latitude, observer.longitude);
   for (const b of bodies) {
     const kind: SkyObject["kind"] =
       b.type === "Planet" ? "planet" : b.type === "Moon" ? "moon" : "sun";

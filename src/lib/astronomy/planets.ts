@@ -34,17 +34,32 @@ const PLANET_MAG: Record<string, number> = {
   Neptune: 7.8,
 };
 
-function eqOf(body: Astronomy.Body, date: Date): { ra: number; dec: number; distAu: number } {
-  const eq = Astronomy.Equator(body, date, /*observer=*/null as unknown as Astronomy.Observer, /*ofdate=*/true, /*aberration=*/true);
+function eqOf(
+  body: Astronomy.Body,
+  date: Date,
+  observer: Astronomy.Observer
+): { ra: number; dec: number; distAu: number } {
+  // astronomy-engine's Equator requires a real Observer when ofdate=true; a
+  // null observer throws (which previously got swallowed, dropping the Moon
+  // and all planets from the catalog). Topocentric coords are also slightly
+  // more accurate, notably for the Moon's parallax.
+  const eq = Astronomy.Equator(body, date, observer, /*ofdate=*/true, /*aberration=*/true);
   return { ra: eq.ra, dec: eq.dec, distAu: eq.dist };
 }
 
-export function getSolarBodies(date: Date): SolarBody[] {
+export function getSolarBodies(
+  date: Date,
+  observerLat = 0,
+  observerLon = 0
+): SolarBody[] {
   const bodies: SolarBody[] = [];
+  // A real Observer is required by astronomy-engine for ofdate coordinates.
+  // Elevation is approximated at sea level; the effect on alt/az is negligible.
+  const observer = new Astronomy.Observer(observerLat, observerLon, 0);
 
   // Sun
   try {
-    const sun = eqOf(Astronomy.Body.Sun, date);
+    const sun = eqOf(Astronomy.Body.Sun, date, observer);
     bodies.push({
       name: "Sun",
       type: "Star",
@@ -58,7 +73,7 @@ export function getSolarBodies(date: Date): SolarBody[] {
 
   // Moon
   try {
-    const moon = eqOf(Astronomy.Body.Moon, date);
+    const moon = eqOf(Astronomy.Body.Moon, date, observer);
     bodies.push({
       name: "Moon",
       type: "Moon",
@@ -73,7 +88,7 @@ export function getSolarBodies(date: Date): SolarBody[] {
   // Planets
   for (const p of PLANETS) {
     try {
-      const eq = eqOf(p.body, date);
+      const eq = eqOf(p.body, date, observer);
       bodies.push({
         name: p.name,
         type: "Planet",
