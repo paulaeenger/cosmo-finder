@@ -84,7 +84,10 @@ export function SkyView({
   } | null>(null);
   const TAP_THRESHOLD_PX = 8;
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (mode !== "manual") return;
+    // Arm tap/drag tracking in BOTH modes. (Panning only acts in manual mode,
+    // but we always need fresh state so a stale drag flag can never linger and
+    // swallow a later tap.) Reset the guard on every new touch.
+    wasDragRef.current = false;
     const t = e.touches[0];
     if (!t) return;
     touchStateRef.current = {
@@ -96,10 +99,9 @@ export function SkyView({
     };
   };
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (mode !== "manual") return;
     const state = touchStateRef.current;
     const t = e.touches[0];
-    if (!state || !t || !onPan) return;
+    if (!state || !t) return;
     const dxPx = t.clientX - state.lastX;
     const dyPx = t.clientY - state.lastY;
     // Mark as moved once we've passed the tap threshold
@@ -107,10 +109,11 @@ export function SkyView({
     const totalDy = Math.abs(t.clientY - state.startY);
     if (totalDx + totalDy > TAP_THRESHOLD_PX) {
       state.moved = true;
+    }
+    // Panning only happens in manual mode.
+    if (mode === "manual" && state.moved && onPan) {
       // Prevent page scroll while dragging the sky
       e.preventDefault();
-    }
-    if (state.moved) {
       // Convert pixels to degrees using the field of view.
       // Horizontal: width pixels = fovDeg degrees of azimuth.
       // Vertical: same scaling for altitude (dragging up looks up).
@@ -128,18 +131,45 @@ export function SkyView({
       state.lastY = t.clientY;
     }
   };
-  const handleTouchEnd = () => {
-    // Reset; the parent retains the latest panOffset.
-    touchStateRef.current = null;
-  };
   // Whether to swallow object-tap events because the user is dragging,
   // not tapping. We pass this via a closure to each tap handler below.
   const wasDragRef = useRef(false);
-  const handleTouchEndCapture = (e: React.TouchEvent) => {
+  // Set briefly after a touch-dispatched tap so the trailing synthetic click
+  // doesn't open the same object a second time.
+  const suppressClickRef = useRef(false);
+  // Latest hit-test fn (set after projection each render) so the touch-end
+  // handler can resolve which object sits under the finger for instant taps.
+  const hitTestObjectRef = useRef<((x: number, y: number) => SkyObject | null) | null>(null);
+  const handleTouchEnd = (e: React.TouchEvent) => {
     const state = touchStateRef.current;
-    wasDragRef.current = !!(state && state.moved);
+    const moved = !!(state && state.moved);
+    wasDragRef.current = moved;
+    touchStateRef.current = null;
+    // If this was a genuine tap (no drag), dispatch it NOW from the touch event
+    // rather than waiting for the browser's delayed synthetic click (~300ms).
+    // We resolve which object — if any — sits under the finger and open it.
+    if (!moved) {
+      const t = e.changedTouches[0];
+      if (t && onObjectTap) {
+        const hit = hitTestObjectRef.current?.(t.clientX, t.clientY);
+        if (hit) {
+          e.preventDefault(); // also suppresses the trailing synthetic click
+          // Belt-and-suspenders: ignore the synthetic click that may still
+          // fire on some iOS versions, so we never open twice.
+          suppressClickRef.current = true;
+          window.setTimeout(() => {
+            suppressClickRef.current = false;
+          }, 400);
+          onObjectTap(hit);
+        }
+      }
+    }
   };
   const tapIfNotDragging = (cb: () => void) => () => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
     if (wasDragRef.current) {
       wasDragRef.current = false;
       return;
@@ -252,6 +282,28 @@ export function SkyView({
         : [],
     [observerLat, observerLon, now, view, fovDeg, size.w, size.h]
   );
+  // Keep the hit-test current: map a screen point to the nearest tappable
+  // object within a finger-sized radius. Used for instant (no-delay) taps.
+  hitTestObjectRef.current = (clientX: number, clientY: number) => {
+    const el = containerRef.current;
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    const TAP_RADIUS = 22; // generous finger target in px
+    let best: SkyObject | null = null;
+    let bestDist = TAP_RADIUS * TAP_RADIUS;
+    for (const p of projected) {
+      const dx = p.x - x;
+      const dy = p.y - y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 <= bestDist) {
+        bestDist = d2;
+        best = p.obj;
+      }
+    }
+    return best;
+  };
   // Calibrating guard — after all hooks so hook order is stable.
   if (!view) {
     return (
@@ -273,12 +325,14 @@ export function SkyView({
       className="relative h-[60vh] w-full overflow-hidden rounded-3xl border border-white/10"
       style={{
         background: `linear-gradient(180deg, ${skyGradient.top} 0%, ${skyGradient.middle} 60%, ${skyGradient.bottom} 100%)`,
-        touchAction: mode === "manual" ? "none" : "auto",
+        // manual: none (we own all gestures). live: manipulation removes the
+        // browser's ~300ms double-tap-zoom wait so taps register instantly,
+        // while still allowing the page to scroll.
+        touchAction: mode === "manual" ? "none" : "manipulation",
       }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      onTouchEndCapture={handleTouchEndCapture}
     >
       <svg
         viewBox={`0 0 ${size.w} ${size.h}`}
