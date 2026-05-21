@@ -252,7 +252,7 @@ export type OrientationSmoother = {
  * @param factor  0..1 — fraction of the NEW reading blended in each update.
  *                Lower = smoother but laggier. ~0.25 is a good phone default.
  */
-export function makeOrientationSmoother(factor = 0.25): OrientationSmoother {
+export function makeOrientationSmoother(factor = 0.12): OrientationSmoother {
   let alt: number | null = null;
   // Azimuth carried as a 2D unit-ish vector to survive the 0/360 wrap.
   let ax = 0;
@@ -270,9 +270,21 @@ export function makeOrientationSmoother(factor = 0.25): OrientationSmoother {
         ay = ny;
         primed = true;
       } else {
-        alt = alt! + (h.alt - alt!) * factor;
-        ax = ax + (nx - ax) * factor;
-        ay = ay + (ny - ay) * factor;
+        // Adaptive smoothing: tiny frame-to-frame changes are almost certainly
+        // sensor jitter, so smooth them HARD (steady sky). Large changes are
+        // the user actually moving the phone, so let those through quickly so
+        // it never feels laggy. We measure how far the new reading is from the
+        // current smoothed one and scale the blend factor up with that error.
+        const altErr = Math.abs(h.alt - alt!);
+        // Azimuth error via the smoothed heading angle vs the new one.
+        const curAz = Math.atan2(ax, ay) * RAD;
+        let azErr = Math.abs(((h.az - curAz + 540) % 360) - 180);
+        const err = Math.max(altErr, azErr);
+        // factor at rest (small err) → ~factor; large err (>~25°) → ~0.6.
+        const adaptive = Math.min(0.6, factor + (err / 25) * (0.6 - factor));
+        alt = alt! + (h.alt - alt!) * adaptive;
+        ax = ax + (nx - ax) * adaptive;
+        ay = ay + (ny - ay) * adaptive;
       }
       let az = Math.atan2(ax, ay) * RAD;
       az = ((az % 360) + 360) % 360;

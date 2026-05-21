@@ -65,20 +65,33 @@ export function useDeviceOrientation() {
         }
       }
 
-      // Some browsers fire `deviceorientationabsolute` for true compass heading.
+      // Two events can fire — `deviceorientationabsolute` (true-north heading)
+      // and plain `deviceorientation` (often a relative/arbitrary heading).
+      // Listening to both lets their differing headings fight each other and
+      // makes the sky jump. So once we've locked onto an absolute source, we
+      // ignore the relative one. iOS exposes true heading via
+      // webkitCompassHeading on the plain event, which also counts as absolute.
+      let haveAbsolute = false;
       const handler = (e: DeviceOrientationEvent) => {
-        // webkitCompassHeading exists on iOS Safari and is more reliable than alpha.
         const ev = e as unknown as {
           webkitCompassHeading?: number;
           webkitCompassAccuracy?: number;
         };
-        const compass = ev.webkitCompassHeading;
-        const alpha = compass != null ? 360 - compass : e.alpha;
+        const hasCompass = typeof ev.webkitCompassHeading === "number";
+        const isAbsolute = e.absolute === true || hasCompass;
+
+        // Once we've seen an absolute reading, drop any later relative-only
+        // events (they carry a different, drifting heading).
+        if (haveAbsolute && !isAbsolute) return;
+        if (isAbsolute) haveAbsolute = true;
+
+        // webkitCompassHeading (iOS) is the most reliable true-north source.
+        const alpha = hasCompass ? 360 - (ev.webkitCompassHeading as number) : e.alpha;
         setOrientation({
           alpha: alpha ?? null,
           beta: e.beta ?? null,
           gamma: e.gamma ?? null,
-          absolute: e.absolute === true,
+          absolute: isAbsolute,
           screenAngle: readScreenAngle(),
           compassAccuracy:
             typeof ev.webkitCompassAccuracy === "number"
