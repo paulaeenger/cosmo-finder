@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import { motion } from "framer-motion";
 import { MapPin, Compass, Clock } from "lucide-react";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useDeviceOrientation } from "@/hooks/useDeviceOrientation";
@@ -33,6 +32,7 @@ import { TimeScrubber } from "@/components/TimeScrubber";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
 import { CalibrationCoach } from "@/components/CalibrationCoach";
 import { ConditionsTimeline } from "@/components/ConditionsTimeline";
+import { TrackingGuide } from "@/components/TrackingGuide";
 export default function HomePage() {
   const { position, error: geoError, loading: geoLoading, requestLocation } = useGeolocation();
   const { orientation, granted, error: orientationError, requestOrientation } = useDeviceOrientation();
@@ -273,15 +273,12 @@ export default function HomePage() {
                 find it even when the planets filter is off. */}
             <SearchPanel sky={sky} onPick={(o) => setDetail(o)} />
             <TonightHighlights sky={filteredSky} onPick={(o) => setDetail(o)} />
-            {tracked && (
-              <motion.button
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                onClick={() => setTracked(null)}
-                className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-[12px] uppercase tracking-[0.25em] text-white/60 font-mono"
-              >
-                Stop guiding to {shortName(tracked.name)} · resume auto-detect
-              </motion.button>
+            {tracked && liveTracked && (
+              <TrackingGuide
+                target={liveTracked}
+                pointing={pointing}
+                onStop={() => setTracked(null)}
+              />
             )}
             <Footer satCount={satellites.length} />
           </>
@@ -351,12 +348,6 @@ function Stat({ icon, value }: { icon: React.ReactNode; value: string }) {
 function cardinal(az: number) {
   const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
   return dirs[Math.round(((az % 360) / 45)) % 8];
-}
-function shortName(name: string) {
-  if (name.length <= 14) return name;
-  if (name.includes("—")) return name.split("—")[0].trim();
-  if (name.includes("(")) return name.split(" ")[0];
-  return name.slice(0, 13) + "…";
 }
 function Footer({ satCount }: { satCount: number }) {
   return (

@@ -23,6 +23,19 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Remove the browser's ~300ms double-tap-zoom wait on every interactive
+   element so taps register on the first press instead of feeling like they
+   "didn't take." Also kill the grey tap-highlight flash on iOS. */
+button,
+a,
+[role="button"],
+input,
+select,
+textarea {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   /* Faint star-field background — fixed so it doesn't move with scroll */
   background-image:

@@ -286,3 +286,89 @@ export function makeOrientationSmoother(factor = 0.25): OrientationSmoother {
     },
   };
 }
+
+// ============================================================================
+// Tracking guidance — turn a "where I'm pointing" vs "where the target is"
+// comparison into human instructions ("turn left, tilt up").
+// ============================================================================
+
+export type GuidanceArrow = "up" | "down" | "left" | "right" | "on-target";
+
+export type TrackingGuidance = {
+  /** Total angular separation in degrees. */
+  separation: number;
+  /** Horizontal instruction: turn left/right (or none when aligned). */
+  turn: "left" | "right" | null;
+  /** Vertical instruction: tilt up/down (or none when aligned). */
+  tilt: "up" | "down" | null;
+  /** The single most important arrow to show prominently. */
+  primary: GuidanceArrow;
+  /** True once the phone is aimed within the on-target threshold. */
+  onTarget: boolean;
+  /** Short human phrase, e.g. "Turn left and tilt up". */
+  text: string;
+};
+
+/**
+ * Compute how the user should move the phone to bring `target` to the center
+ * of view from their current `pointing` direction.
+ *
+ * Azimuth wrap is handled so "turn left vs right" always takes the short way
+ * around. `onTargetDeg` is the cone (radius, degrees) counted as "aimed".
+ */
+export function computeTrackingGuidance(
+  pointing: HorizontalCoord,
+  target: HorizontalCoord,
+  onTargetDeg = 4
+): TrackingGuidance {
+  const separation = angularDistance(pointing, target);
+
+  // Azimuth error, normalized to [-180, 180]. Positive = target is clockwise
+  // (to the right) of where we're pointing.
+  let dAz = target.az - pointing.az;
+  dAz = ((dAz + 540) % 360) - 180;
+  // Altitude error. Positive = target is higher than where we're pointing.
+  const dAlt = target.alt - pointing.alt;
+
+  const onTarget = separation <= onTargetDeg;
+
+  // Dead-zone each axis a bit so we don't nag about a degree of jitter.
+  const AXIS_DEADZONE = 3;
+  const turn: "left" | "right" | null = onTarget
+    ? null
+    : Math.abs(dAz) < AXIS_DEADZONE
+    ? null
+    : dAz > 0
+    ? "right"
+    : "left";
+  const tilt: "up" | "down" | null = onTarget
+    ? null
+    : Math.abs(dAlt) < AXIS_DEADZONE
+    ? null
+    : dAlt > 0
+    ? "up"
+    : "down";
+
+  // Primary arrow = whichever axis is more wrong, so the big hint points the
+  // most useful way.
+  let primary: GuidanceArrow = "on-target";
+  if (!onTarget) {
+    if (Math.abs(dAz) >= Math.abs(dAlt)) {
+      primary = dAz > 0 ? "right" : "left";
+    } else {
+      primary = dAlt > 0 ? "up" : "down";
+    }
+  }
+
+  let text: string;
+  if (onTarget) {
+    text = "You're on it";
+  } else {
+    const parts: string[] = [];
+    if (turn) parts.push(`Turn ${turn}`);
+    if (tilt) parts.push(parts.length ? `tilt ${tilt}` : `Tilt ${tilt}`);
+    text = parts.length ? parts.join(" and ") : "Almost there";
+  }
+
+  return { separation, turn, tilt, primary, onTarget, text };
+}
