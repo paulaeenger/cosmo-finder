@@ -130,6 +130,85 @@ export function filterVisibleNow(
 }
 
 /**
+ * One sampled hour in the night-quality timeline.
+ */
+export type TimelineHour = {
+  /** The clock time for this sample. */
+  time: Date;
+  /** Sun altitude in degrees at this time. */
+  sunAlt: number;
+  /** Sky phase at this time. */
+  phase: SkyPhase;
+  /**
+   * Darkness quality 0..1 — how good naked-eye/deep-sky viewing is. 0 = full
+   * daylight, 1 = astronomical night. Drives the color-coded strip.
+   */
+  quality: number;
+  /** True for the sample closest to "now". */
+  isNow: boolean;
+};
+
+/** Map a sky phase to a 0..1 viewing-quality score. */
+function phaseQuality(phase: SkyPhase): number {
+  switch (phase) {
+    case "day":
+      return 0;
+    case "civil":
+      return 0.25;
+    case "nautical":
+      return 0.55;
+    case "astronomical":
+      return 0.8;
+    case "night":
+      return 1;
+  }
+}
+
+/**
+ * Build an hour-by-hour viewing-quality timeline centered on the night.
+ *
+ * Samples the Sun's altitude across a window (default: from a few hours before
+ * `now` through the following morning) so the UI can show, at a glance, which
+ * hours tonight are dark enough to be worth looking up. This is the local,
+ * astronomy-only analogue of a cloud-cover forecast strip — it answers "when
+ * is the sky dark?" without any network call. Cloud data, if ever added, would
+ * layer on top of this.
+ *
+ * @param hoursBack   how many hours before `now` to start (default 3)
+ * @param hoursTotal  total span in hours (default 18 — covers a full night)
+ */
+export function buildConditionsTimeline(
+  observerLat: number,
+  observerLon: number,
+  now: Date,
+  sunAltitudeFn: (lat: number, lon: number, date: Date) => number,
+  hoursBack = 3,
+  hoursTotal = 18
+): TimelineHour[] {
+  const out: TimelineHour[] = [];
+  // Anchor to the top of the hour for clean labels.
+  const start = new Date(now.getTime());
+  start.setMinutes(0, 0, 0);
+  start.setHours(start.getHours() - hoursBack);
+
+  let nearestIdx = 0;
+  let nearestDelta = Infinity;
+  for (let i = 0; i < hoursTotal; i++) {
+    const time = new Date(start.getTime() + i * 3_600_000);
+    const sunAlt = sunAltitudeFn(observerLat, observerLon, time);
+    const phase = getSkyConditions(sunAlt).phase;
+    out.push({ time, sunAlt, phase, quality: phaseQuality(phase), isNow: false });
+    const delta = Math.abs(time.getTime() - now.getTime());
+    if (delta < nearestDelta) {
+      nearestDelta = delta;
+      nearestIdx = i;
+    }
+  }
+  if (out[nearestIdx]) out[nearestIdx].isNow = true;
+  return out;
+}
+
+/**
  * Given current conditions and an observer's location, estimate when the
  * sky will next reach a given phase. Returns a Date or null if the phase
  * doesn't transition within the next 24 hours.

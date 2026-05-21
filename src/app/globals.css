@@ -68,3 +68,20 @@ body {
   to   { transform: rotate(360deg); }
 }
 .sweep { animation: sweep 8s linear infinite; transform-origin: center; }
+
+/* Per-star twinkle. Runs purely in CSS so star shimmer never triggers a React
+   re-render. Each star sets --twinkle-min (its dim point) plus its own delay
+   and duration so the field shimmers out of sync rather than in unison. */
+@keyframes twinkle {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: var(--twinkle-min, 0.75); }
+}
+.star-twinkle {
+  animation: twinkle var(--twinkle-dur, 4s) ease-in-out infinite;
+  animation-delay: var(--twinkle-delay, 0s);
+  will-change: opacity;
+}
+@media (prefers-reduced-motion: reduce) {
+  .star-twinkle { animation: none; }
+}
+

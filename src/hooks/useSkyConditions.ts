@@ -5,7 +5,9 @@ import {
   getSkyConditions,
   filterVisibleNow,
   findNextPhaseTransition,
+  buildConditionsTimeline,
   type SkyConditions,
+  type TimelineHour,
 } from "@/lib/astronomy/sky-conditions";
 import { sunAltitude } from "@/lib/astronomy/projection";
 import type { SkyObject } from "@/lib/astronomy/matching";
@@ -16,6 +18,7 @@ export type SkyConditionsState = {
   visibleSky: SkyObject[];
   hiddenAboveHorizon: number;
   nextDarkPhase: Date | null;
+  timeline: TimelineHour[];
 };
 
 export function useSkyConditions(
@@ -51,6 +54,13 @@ export function useSkyConditions(
       );
     }
 
-    return { conditions, visibleSky, hiddenAboveHorizon, nextDarkPhase };
+    const timeline = buildConditionsTimeline(
+      position.lat,
+      position.lon,
+      now,
+      sunAltitude
+    );
+
+    return { conditions, visibleSky, hiddenAboveHorizon, nextDarkPhase, timeline };
   }, [position, sky, now]);
 }

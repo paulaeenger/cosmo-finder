@@ -5,7 +5,12 @@ import type { SkyObject } from "@/lib/astronomy/matching";
 import { project } from "@/lib/astronomy/projection";
 import constellationLines from "@/lib/data/constellation-lines.json";
 type Props = {
-  pointing: { alt: number; az: number } | null;
+  /**
+   * The absolute direction the camera looks (alt/az degrees), decided by the
+   * parent: live gyro pointing in "live" mode, or the user-controlled view in
+   * "manual" mode. Null while the compass is still calibrating.
+   */
+  view: { alt: number; az: number } | null;
   sky: SkyObject[];
   trackedTarget?: SkyObject | null;
   onObjectTap?: (obj: SkyObject) => void;
@@ -17,10 +22,11 @@ type Props = {
   showConstellations?: boolean;
   /** "live" follows the gyro; "manual" lets the user pan with touch. */
   mode?: "live" | "manual";
-  /** Pan offset (degrees) applied on top of pointing in manual mode. */
-  panOffset?: { dAlt: number; dAz: number };
-  /** Called when the user drags in manual mode. Delta in degrees. */
-  onPanChange?: (delta: { dAlt: number; dAz: number }) => void;
+  /**
+   * Emits the incremental pan for a single move event (degrees), manual mode
+   * only. The parent applies it functionally so fast events never get dropped.
+   */
+  onPan?: (delta: { dAlt: number; dAz: number }) => void;
 };
 /**
  * Full-screen panoramic sky renderer (v2).
@@ -40,7 +46,7 @@ type Props = {
  *  12. Tracked-target highlight ring + on-screen label
  */
 export function SkyView({
-  pointing,
+  view: viewDir,
   sky,
   trackedTarget,
   onObjectTap,
@@ -50,18 +56,10 @@ export function SkyView({
   fovDeg = 90,
   showConstellations = true,
   mode = "live",
-  panOffset = { dAlt: 0, dAz: 0 },
-  onPanChange,
+  onPan,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ w: 360, h: 600 });
-  // Twinkle phase advances every 2s — slow enough that motion is gentle
-  // but fast enough that the sky feels alive.
-  const [twinklePhase, setTwinklePhase] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setTwinklePhase((p) => p + 1), 2000);
-    return () => clearInterval(id);
-  }, []);
   // Track container size for responsive rendering
   useEffect(() => {
     if (!containerRef.current) return;
@@ -101,7 +99,7 @@ export function SkyView({
     if (mode !== "manual") return;
     const state = touchStateRef.current;
     const t = e.touches[0];
-    if (!state || !t || !onPanChange) return;
+    if (!state || !t || !onPan) return;
     const dxPx = t.clientX - state.lastX;
     const dyPx = t.clientY - state.lastY;
     // Mark as moved once we've passed the tap threshold
@@ -117,11 +115,14 @@ export function SkyView({
       // Horizontal: width pixels = fovDeg degrees of azimuth.
       // Vertical: same scaling for altitude (dragging up looks up).
       const degPerPx = fovDeg / size.w;
+      // Emit ONLY this event's incremental delta. The parent applies it
+      // functionally onto the live view, so rapid move events between React
+      // commits all land instead of overwriting one stale base.
       // Drag right → camera looks left (decrease az).
       // Drag down → camera looks up (increase alt).
-      onPanChange({
-        dAlt: panOffset.dAlt + dyPx * degPerPx,
-        dAz: panOffset.dAz - dxPx * degPerPx,
+      onPan({
+        dAlt: dyPx * degPerPx,
+        dAz: -dxPx * degPerPx,
       });
       state.lastX = t.clientX;
       state.lastY = t.clientY;
@@ -157,7 +158,102 @@ export function SkyView({
     for (const o of sky) if (o.kind === "star") m.set(o.name, o);
     return m;
   }, [sky]);
-  if (!pointing) {
+  // Effective viewing direction. Clamp altitude and wrap azimuth. Null while
+  // the compass is calibrating; the projection memos below no-op in that case
+  // so all hooks still run unconditionally (Rules of Hooks).
+  const view = useMemo(
+    () =>
+      viewDir
+        ? {
+            alt: Math.max(-89, Math.min(89, viewDir.alt)),
+            az: ((viewDir.az % 360) + 360) % 360,
+          }
+        : null,
+    [viewDir]
+  );
+  // Project all visible objects. Rebuilds only when the catalog or the view
+  // changes — not on the 2s twinkle tick.
+  type Projected = { obj: SkyObject; x: number; y: number };
+  const projected = useMemo<Projected[]>(() => {
+    if (!view) return [];
+    const out: Projected[] = [];
+    for (const obj of sky) {
+      if (obj.alt < -2) continue;
+      const p = project(obj.alt, obj.az, view.alt, view.az, fovDeg, size.w, size.h);
+      if (!p.visible) continue;
+      if (p.x < -50 || p.x > size.w + 50 || p.y < -50 || p.y > size.h + 50) continue;
+      out.push({ obj, x: p.x, y: p.y });
+    }
+    return out;
+  }, [sky, view, fovDeg, size.w, size.h]);
+  // Project constellation line endpoints
+  const lineSegments = useMemo<Array<{ a: { x: number; y: number }; b: { x: number; y: number } }>>(() => {
+    if (!view) return [];
+    const out: Array<{ a: { x: number; y: number }; b: { x: number; y: number } }> = [];
+    for (const c of constellationLines as Array<{
+      constellation: string;
+      lines: [string, string][];
+    }>) {
+      for (const [aName, bName] of c.lines) {
+        const a = starByName.get(aName);
+        const b = starByName.get(bName);
+        if (!a || !b) continue;
+        if (a.alt < -2 || b.alt < -2) continue;
+        const pa = project(a.alt, a.az, view.alt, view.az, fovDeg, size.w, size.h);
+        const pb = project(b.alt, b.az, view.alt, view.az, fovDeg, size.w, size.h);
+        if (!pa.visible || !pb.visible) continue;
+        out.push({ a: { x: pa.x, y: pa.y }, b: { x: pb.x, y: pb.y } });
+      }
+    }
+    return out;
+  }, [starByName, view, fovDeg, size.w, size.h]);
+  // Horizon points (sample every 2°)
+  const horizonPoints = useMemo<Array<{ x: number; y: number; visible: boolean }>>(() => {
+    if (!view) return [];
+    const out: Array<{ x: number; y: number; visible: boolean }> = [];
+    for (let az = 0; az < 360; az += 2) {
+      out.push(project(0, az, view.alt, view.az, fovDeg, size.w, size.h));
+    }
+    return out;
+  }, [view, fovDeg, size.w, size.h]);
+  const cardinals = useMemo(
+    () =>
+      !view
+        ? []
+        : [
+            { label: "N", az: 0 },
+            { label: "E", az: 90 },
+            { label: "S", az: 180 },
+            { label: "W", az: 270 },
+          ].map((c) => ({
+            label: c.label,
+            p: project(0, c.az, view.alt, view.az, fovDeg, size.w, size.h),
+          })),
+    [view, fovDeg, size.w, size.h]
+  );
+  // Altitude rings (every 30°: 30, 60, zenith)
+  const altRings = useMemo<Array<Array<{ x: number; y: number; visible: boolean }>>>(() => {
+    if (!view) return [];
+    const out: Array<Array<{ x: number; y: number; visible: boolean }>> = [];
+    for (const ringAlt of [30, 60]) {
+      const pts: Array<{ x: number; y: number; visible: boolean }> = [];
+      for (let az = 0; az < 360; az += 4) {
+        pts.push(project(ringAlt, az, view.alt, view.az, fovDeg, size.w, size.h));
+      }
+      out.push(pts);
+    }
+    return out;
+  }, [view, fovDeg, size.w, size.h]);
+  // Ecliptic line (sample at multiple RAs converted to alt/az for current time)
+  const ecliptic = useMemo(
+    () =>
+      view
+        ? computeEclipticPath(observerLat, observerLon, now, view, fovDeg, size.w, size.h)
+        : [],
+    [observerLat, observerLon, now, view, fovDeg, size.w, size.h]
+  );
+  // Calibrating guard — after all hooks so hook order is stable.
+  if (!view) {
     return (
       <div
         ref={containerRef}
@@ -171,63 +267,6 @@ export function SkyView({
       </div>
     );
   }
-  // Effective viewing direction — gyro pointing with manual pan applied
-  const view = {
-    alt: Math.max(-89, Math.min(89, pointing.alt + panOffset.dAlt)),
-    az: ((pointing.az + panOffset.dAz) % 360 + 360) % 360,
-  };
-  // Project all visible objects
-  type Projected = { obj: SkyObject; x: number; y: number };
-  const projected: Projected[] = [];
-  for (const obj of sky) {
-    if (obj.alt < -2) continue;
-    const p = project(obj.alt, obj.az, view.alt, view.az, fovDeg, size.w, size.h);
-    if (!p.visible) continue;
-    if (p.x < -50 || p.x > size.w + 50 || p.y < -50 || p.y > size.h + 50) continue;
-    projected.push({ obj, x: p.x, y: p.y });
-  }
-  // Project constellation line endpoints
-  const lineSegments: Array<{ a: { x: number; y: number }; b: { x: number; y: number } }> = [];
-  for (const c of constellationLines as Array<{
-    constellation: string;
-    lines: [string, string][];
-  }>) {
-    for (const [aName, bName] of c.lines) {
-      const a = starByName.get(aName);
-      const b = starByName.get(bName);
-      if (!a || !b) continue;
-      if (a.alt < -2 || b.alt < -2) continue;
-      const pa = project(a.alt, a.az, view.alt, view.az, fovDeg, size.w, size.h);
-      const pb = project(b.alt, b.az, view.alt, view.az, fovDeg, size.w, size.h);
-      if (!pa.visible || !pb.visible) continue;
-      lineSegments.push({ a: { x: pa.x, y: pa.y }, b: { x: pb.x, y: pb.y } });
-    }
-  }
-  // Horizon points (sample every 2°)
-  const horizonPoints: Array<{ x: number; y: number; visible: boolean }> = [];
-  for (let az = 0; az < 360; az += 2) {
-    horizonPoints.push(project(0, az, view.alt, view.az, fovDeg, size.w, size.h));
-  }
-  const cardinals = [
-    { label: "N", az: 0 },
-    { label: "E", az: 90 },
-    { label: "S", az: 180 },
-    { label: "W", az: 270 },
-  ].map((c) => ({
-    label: c.label,
-    p: project(0, c.az, view.alt, view.az, fovDeg, size.w, size.h),
-  }));
-  // Altitude rings (every 30°: 30, 60, zenith)
-  const altRings: Array<Array<{ x: number; y: number; visible: boolean }>> = [];
-  for (const ringAlt of [30, 60]) {
-    const pts: Array<{ x: number; y: number; visible: boolean }> = [];
-    for (let az = 0; az < 360; az += 4) {
-      pts.push(project(ringAlt, az, view.alt, view.az, fovDeg, size.w, size.h));
-    }
-    altRings.push(pts);
-  }
-  // Ecliptic line (sample at multiple RAs converted to alt/az for current time)
-  const ecliptic = computeEclipticPath(observerLat, observerLon, now, view, fovDeg, size.w, size.h);
   return (
     <div
       ref={containerRef}
@@ -382,28 +421,21 @@ export function SkyView({
             const meta = starMetaFor(p.obj.name, p.obj.mag);
             const isTracked = trackedTarget?.name === p.obj.name;
             const labelable = p.obj.mag < 1.5 || isTracked;
-            // Twinkle: phase derived from name + global phase
-            const twinkle = twinkleAmount(p.obj.name, twinklePhase, p.obj.mag);
-            const radius = meta.r * twinkle.scale;
+            const radius = meta.r;
+            // Twinkle is now pure CSS: a per-star opacity shimmer on the
+            // wrapping <g>. Delay/duration/dim-point are derived from the name
+            // so the field shimmers out of sync, and brighter stars swing a
+            // little more. No React state, no per-frame work.
+            const tw = twinkleVars(p.obj.name, p.obj.mag);
             return (
               <g
                 key={`star-${p.obj.name}-${i}`}
                 onClick={tapIfNotDragging(() => onObjectTap?.(p.obj))}
                 style={{ cursor: onObjectTap ? "pointer" : "default" }}
               >
-                {/* Tap target — generous hit area */}
+                {/* Tap target — generous hit area (never twinkles) */}
                 <circle cx={p.x} cy={p.y} r={Math.max(12, radius * 6)} fill="transparent" />
-                {/* Soft halo for naked-eye-bright stars */}
-                {meta.r > 1.2 && (
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={meta.r * 4}
-                    fill={`url(#halo${meta.haloKey})`}
-                    opacity={twinkle.glow * darkness}
-                  />
-                )}
-                {/* Tracked highlight ring */}
+                {/* Tracked highlight ring (never twinkles) */}
                 {isTracked && (
                   <circle
                     cx={p.x}
@@ -415,46 +447,59 @@ export function SkyView({
                     opacity={0.9}
                   />
                 )}
-                {/* Diffraction spike for very bright stars only */}
-                {meta.r >= 2.5 && darkness > 0.5 && (
-                  <g opacity={twinkle.glow * 0.5}>
-                    <line
-                      x1={p.x - meta.r * 4}
-                      y1={p.y}
-                      x2={p.x + meta.r * 4}
-                      y2={p.y}
-                      stroke={meta.color}
-                      strokeWidth="0.4"
+                {/* Twinkling visual group: halo, diffraction, body, core */}
+                <g className="star-twinkle" style={tw}>
+                  {/* Soft halo for naked-eye-bright stars */}
+                  {meta.r > 1.2 && (
+                    <circle
+                      cx={p.x}
+                      cy={p.y}
+                      r={meta.r * 4}
+                      fill={`url(#halo${meta.haloKey})`}
+                      opacity={darkness}
                     />
-                    <line
-                      x1={p.x}
-                      y1={p.y - meta.r * 4}
-                      x2={p.x}
-                      y2={p.y + meta.r * 4}
-                      stroke={meta.color}
-                      strokeWidth="0.4"
-                    />
-                  </g>
-                )}
-                {/* The star itself */}
-                <circle
-                  cx={p.x}
-                  cy={p.y}
-                  r={radius}
-                  fill={meta.color}
-                  opacity={Math.min(1, darkness * 1.2 + 0.05)}
-                />
-                {/* Bright inner core */}
-                {meta.r > 1.5 && (
+                  )}
+                  {/* Diffraction spike for very bright stars only */}
+                  {meta.r >= 2.5 && darkness > 0.5 && (
+                    <g opacity={0.5}>
+                      <line
+                        x1={p.x - meta.r * 4}
+                        y1={p.y}
+                        x2={p.x + meta.r * 4}
+                        y2={p.y}
+                        stroke={meta.color}
+                        strokeWidth="0.4"
+                      />
+                      <line
+                        x1={p.x}
+                        y1={p.y - meta.r * 4}
+                        x2={p.x}
+                        y2={p.y + meta.r * 4}
+                        stroke={meta.color}
+                        strokeWidth="0.4"
+                      />
+                    </g>
+                  )}
+                  {/* The star itself */}
                   <circle
                     cx={p.x}
                     cy={p.y}
-                    r={radius * 0.4}
-                    fill="white"
-                    opacity={0.85 * darkness}
+                    r={radius}
+                    fill={meta.color}
+                    opacity={Math.min(1, darkness * 1.2 + 0.05)}
                   />
-                )}
-                {/* Label */}
+                  {/* Bright inner core */}
+                  {meta.r > 1.5 && (
+                    <circle
+                      cx={p.x}
+                      cy={p.y}
+                      r={radius * 0.4}
+                      fill="white"
+                      opacity={0.85 * darkness}
+                    />
+                  )}
+                </g>
+                {/* Label (never twinkles) */}
                 {labelable && darkness > 0.3 && (
                   <text
                     x={p.x + meta.r * 2 + 4}
@@ -638,16 +683,23 @@ function starMetaFor(name: string, mag: number): StarMeta {
   const r = Math.max(0.6, 3.4 - mag * 0.6);
   return { ...palette, r };
 }
-// Twinkle: deterministic per-star "sparkle" that varies subtly with the
-// global phase counter. Brighter stars twinkle more (lower-altitude effect).
-function twinkleAmount(name: string, phase: number, mag: number): { scale: number; glow: number } {
+// Twinkle (CSS): derive a stable per-star dim point, animation duration, and
+// start delay from the star's name so the field shimmers out of sync. Brighter
+// stars dip a little deeper (more visible sparkle); fainter stars stay subtle.
+// Returned as CSS custom properties consumed by the `.star-twinkle` keyframe.
+function twinkleVars(name: string, mag: number): React.CSSProperties {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  const seed = (h + phase * 1664525) >>> 0;
-  // Small pseudo-random in [-1, 1]
-  const wob = ((seed % 1000) / 1000) * 2 - 1;
-  const intensity = mag < 1 ? 0.06 : mag < 2.5 ? 0.04 : 0.02;
-  return { scale: 1 + wob * intensity, glow: 0.5 + wob * 0.15 + 0.45 };
+  // Dim point: brighter stars (low mag) dip to ~0.55, faint stars to ~0.82.
+  const depth = mag < 1 ? 0.55 : mag < 2.5 ? 0.68 : 0.82;
+  // Duration 3.2–5.6s, delay 0–4s — both stable per star.
+  const dur = 3.2 + (h % 2400) / 1000;
+  const delay = (h % 4000) / 1000;
+  return {
+    ["--twinkle-min" as string]: depth.toFixed(2),
+    ["--twinkle-dur" as string]: `${dur.toFixed(2)}s`,
+    ["--twinkle-delay" as string]: `${delay.toFixed(2)}s`,
+  };
 }
 // ============ Sky color & darkness ============
 function skyColors(sunAlt: number): { top: string; middle: string; bottom: string } {

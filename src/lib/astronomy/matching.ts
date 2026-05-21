@@ -64,6 +64,24 @@ export function computeVisibleSky(
   satellites: Satellite[] = [],
   horizonMargin = -5
 ): SkyObject[] {
+  // Thin wrapper preserved for backward compatibility. The static catalog and
+  // the satellites are computed separately so callers (the hook) can refresh
+  // them on independent cadences. Order is preserved: static first, then sats.
+  return [
+    ...computeStaticSky(observer, horizonMargin),
+    ...computeSatelliteObjects(observer, satellites, horizonMargin),
+  ];
+}
+
+/**
+ * Compute every non-satellite object (stars, deep-sky, constellations, Sun,
+ * Moon, planets) for the given observer. These move slowly across the sky, so
+ * this can be refreshed on a relaxed cadence (tens of seconds).
+ */
+export function computeStaticSky(
+  observer: Observer,
+  horizonMargin = -5
+): SkyObject[] {
   const result: SkyObject[] = [];
   // Always include named objects, even when below the horizon.
   // The `belowHorizon` flag lets consumers (search, TonightHighlights) decide
@@ -190,7 +208,21 @@ export function computeVisibleSky(
       description: b.description,
     });
   }
-  // Satellites — propagated live, only if above the horizon
+  return result;
+}
+
+/**
+ * Propagate satellites for the given observer and return those above the
+ * horizon. Satellites move fast (the ISS crosses ~0.5°/sec), so this is meant
+ * to be refreshed on a tight cadence (a couple of seconds) independently of
+ * the static catalog.
+ */
+export function computeSatelliteObjects(
+  observer: Observer,
+  satellites: Satellite[] = [],
+  horizonMargin = -5
+): SkyObject[] {
+  const result: SkyObject[] = [];
   for (const sat of satellites) {
     const pos = propagateSatellite(
       sat,

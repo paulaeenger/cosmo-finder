@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { MapPin, Compass, Clock } from "lucide-react";
 import { useGeolocation } from "@/hooks/useGeolocation";
@@ -15,7 +15,8 @@ import {
   type MatchResult,
 } from "@/lib/astronomy/matching";
 import {
-  deviceToHorizontal,
+  deviceToHorizontalFull,
+  makeOrientationSmoother,
   angularDistance,
 } from "@/lib/astronomy/coords";
 import { StartScanner } from "@/components/StartScanner";
@@ -30,6 +31,8 @@ import { FilterBar } from "@/components/FilterBar";
 import { SkyConditionsBanner } from "@/components/SkyConditionsBanner";
 import { TimeScrubber } from "@/components/TimeScrubber";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
+import { CalibrationCoach } from "@/components/CalibrationCoach";
+import { ConditionsTimeline } from "@/components/ConditionsTimeline";
 export default function HomePage() {
   const { position, error: geoError, loading: geoLoading, requestLocation } = useGeolocation();
   const { orientation, granted, error: orientationError, requestOrientation } = useDeviceOrientation();
@@ -89,18 +92,59 @@ export default function HomePage() {
   const [viewMode, setViewMode] = useState<"panoramic" | "instrument">("panoramic");
   // Live vs Manual: in manual the gyroscope is paused and touch drives the view.
   const [skyMode, setSkyMode] = useState<"live" | "manual">("live");
-  const [panOffset, setPanOffset] = useState<{ dAlt: number; dAz: number }>({
-    dAlt: 0,
-    dAz: 0,
-  });
-  // When switching back to live, reset the pan so the gyro takes over cleanly.
+  // The user-controlled view in manual mode. Null in live mode. Seeded from the
+  // gyro pointing at the instant the user switches to manual, then mutated by
+  // drag deltas. While this is non-null the gyro is effectively frozen — the
+  // view no longer drifts with small hand movements.
+  const [manualView, setManualView] = useState<{ alt: number; az: number } | null>(null);
+  // Stateful smoother — persists across renders so the view glides instead of
+  // jittering frame to frame. Created once.
+  const smootherRef = useRef(makeOrientationSmoother(0.25));
+  const pointing = useMemo(() => {
+    const raw = deviceToHorizontalFull(
+      orientation.alpha,
+      orientation.beta,
+      orientation.gamma,
+      orientation.screenAngle
+    );
+    if (!raw) {
+      smootherRef.current.reset();
+      return null;
+    }
+    return smootherRef.current.push(raw);
+  }, [
+    orientation.alpha,
+    orientation.beta,
+    orientation.gamma,
+    orientation.screenAngle,
+  ]);
+  // On entering manual, snapshot the current pointing so the view starts where
+  // the user was already looking. On returning to live, clear it so the gyro
+  // takes back over cleanly.
   useEffect(() => {
-    if (skyMode === "live") setPanOffset({ dAlt: 0, dAz: 0 });
+    if (skyMode === "manual") {
+      setManualView(pointing ? { alt: pointing.alt, az: pointing.az } : { alt: 20, az: 0 });
+    } else {
+      setManualView(null);
+    }
+    // Intentionally only re-run on mode change — we snapshot pointing once at
+    // switch time and must NOT re-seed on every gyro update (that would refreeze
+    // the view to the gyro and undo the user's drags).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [skyMode]);
-  const pointing = useMemo(
-    () => deviceToHorizontal(orientation.alpha, orientation.beta),
-    [orientation.alpha, orientation.beta]
-  );
+  // Apply a single drag's incremental delta functionally so fast move events
+  // never overwrite each other.
+  const handlePan = useCallback((delta: { dAlt: number; dAz: number }) => {
+    setManualView((v) => {
+      if (!v) return v;
+      return {
+        alt: Math.max(-89, Math.min(89, v.alt + delta.dAlt)),
+        az: ((v.az + delta.dAz) % 360 + 360) % 360,
+      };
+    });
+  }, []);
+  // The direction SkyView renders: gyro in live mode, user view in manual.
+  const skyViewDir = skyMode === "manual" ? manualView : pointing;
   // Match: closest object to phone direction, using the FILTERED sky so
   // turning off "stars" makes the app identify planets/satellites instead.
   // If user is tracking something explicit, resolve to its live alt/az from
@@ -128,6 +172,22 @@ export default function HomePage() {
     return sky.find((o) => o.name === tracked.name) ?? tracked;
   }, [tracked, sky]);
   const ready = position && granted;
+  // Compass calibration coach. iOS reports webkitCompassAccuracy in degrees
+  // (-1 = invalid). When it indicates drift we surface the figure-8 coach once
+  // per session; the user can also open it manually anytime from the header.
+  const [showCalibration, setShowCalibration] = useState(false);
+  const autoPromptedRef = useRef(false);
+  useEffect(() => {
+    if (!ready || autoPromptedRef.current) return;
+    const acc = orientation.compassAccuracy;
+    // Only auto-surface when we have a real iOS reading that looks bad:
+    // -1 (invalid heading) or a large error (> 25°). Null = platform doesn't
+    // report it, so we never auto-nag there.
+    if (acc != null && (acc < 0 || acc > 25)) {
+      autoPromptedRef.current = true;
+      setShowCalibration(true);
+    }
+  }, [ready, orientation.compassAccuracy]);
   return (
     <main className="min-h-screen text-white px-4 py-5 pb-12">
       <div className="mx-auto max-w-md space-y-5">
@@ -144,6 +204,16 @@ export default function HomePage() {
         ) : (
           <>
             <Header position={position} now={now} pointing={pointing} />
+            <button
+              onClick={() => setShowCalibration(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-2 text-[10px] uppercase tracking-[0.25em] text-white/45 font-mono transition hover:text-white/70"
+            >
+              <Compass className="h-3 w-3" />
+              {orientation.compassAccuracy != null &&
+              (orientation.compassAccuracy < 0 || orientation.compassAccuracy > 25)
+                ? "Compass may be off · calibrate"
+                : "Calibrate compass"}
+            </button>
             <OfflineIndicator />
             {skyConditions && (
               <SkyConditionsBanner
@@ -151,6 +221,9 @@ export default function HomePage() {
                 nextDarkPhase={skyConditions.nextDarkPhase}
                 hiddenCount={skyConditions.hiddenAboveHorizon}
               />
+            )}
+            {skyConditions && (
+              <ConditionsTimeline timeline={skyConditions.timeline} />
             )}
             <TimeScrubber
               viewTime={now}
@@ -176,7 +249,7 @@ export default function HomePage() {
             )}
             {viewMode === "panoramic" && position ? (
               <SkyView
-                pointing={pointing}
+                view={skyViewDir}
                 sky={filteredSky}
                 trackedTarget={liveTracked}
                 onObjectTap={(o) => setDetail(o)}
@@ -185,8 +258,7 @@ export default function HomePage() {
                 now={now}
                 showConstellations={filters.constellations}
                 mode={skyMode}
-                panOffset={panOffset}
-                onPanChange={setPanOffset}
+                onPan={handlePan}
               />
             ) : (
               <SkyCompass
@@ -227,6 +299,11 @@ export default function HomePage() {
           setTracked(o);
           setDetail(null);
         }}
+      />
+      <CalibrationCoach
+        open={showCalibration}
+        onClose={() => setShowCalibration(false)}
+        accuracy={orientation.compassAccuracy}
       />
     </main>
   );

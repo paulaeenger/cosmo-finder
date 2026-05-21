@@ -7,11 +7,29 @@ export type Orientation = {
   beta: number | null;  // front/back tilt
   gamma: number | null; // side tilt
   absolute: boolean;
+  screenAngle: number;  // screen.orientation.angle (0|90|180|270)
+  /**
+   * iOS-only magnetometer accuracy in degrees (max heading error). -1 when the
+   * heading is invalid and calibration is needed; null on platforms that don't
+   * report it (e.g. most Android browsers).
+   */
+  compassAccuracy: number | null;
 };
 
 type DeviceOrientationEventStatic = typeof DeviceOrientationEvent & {
   requestPermission?: () => Promise<"granted" | "denied">;
 };
+
+/** Read the screen's rotation (0|90|180|270), with a fallback for old iOS. */
+function readScreenAngle(): number {
+  if (typeof window === "undefined") return 0;
+  const a = window.screen?.orientation?.angle;
+  if (typeof a === "number") return a;
+  // Deprecated but still present on older iOS Safari.
+  const legacy = (window as unknown as { orientation?: number }).orientation;
+  if (typeof legacy === "number") return ((legacy % 360) + 360) % 360;
+  return 0;
+}
 
 export function useDeviceOrientation() {
   const [orientation, setOrientation] = useState<Orientation>({
@@ -19,6 +37,8 @@ export function useDeviceOrientation() {
     beta: null,
     gamma: null,
     absolute: false,
+    screenAngle: 0,
+    compassAccuracy: null,
   });
   const [granted, setGranted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,13 +68,22 @@ export function useDeviceOrientation() {
       // Some browsers fire `deviceorientationabsolute` for true compass heading.
       const handler = (e: DeviceOrientationEvent) => {
         // webkitCompassHeading exists on iOS Safari and is more reliable than alpha.
-        const compass = (e as unknown as { webkitCompassHeading?: number }).webkitCompassHeading;
+        const ev = e as unknown as {
+          webkitCompassHeading?: number;
+          webkitCompassAccuracy?: number;
+        };
+        const compass = ev.webkitCompassHeading;
         const alpha = compass != null ? 360 - compass : e.alpha;
         setOrientation({
           alpha: alpha ?? null,
           beta: e.beta ?? null,
           gamma: e.gamma ?? null,
           absolute: e.absolute === true,
+          screenAngle: readScreenAngle(),
+          compassAccuracy:
+            typeof ev.webkitCompassAccuracy === "number"
+              ? ev.webkitCompassAccuracy
+              : null,
         });
       };
 
