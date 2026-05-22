@@ -284,6 +284,7 @@ export type OrientationSmoother = {
 export function makeOrientationSmoother(factor = 0.12): OrientationSmoother {
   let sx = 0, sy = 0, sz = 0;
   let primed = false;
+  let rejectCount = 0;
 
   return {
     push(v: Vec3): HorizontalCoord {
@@ -297,12 +298,23 @@ export function makeOrientationSmoother(factor = 0.12): OrientationSmoother {
         // Angular error between smoothed and new direction (dot → angle).
         const dotp = Math.max(-1, Math.min(1, sx * nx + sy * ny + sz * nz));
         const errDeg = Math.acos(dotp) * RAD;
+        // GLITCH REJECTION: a real hand can't swing the aim more than ~35° in
+        // one frame (~16ms). Larger jumps are sensor artifacts — most often the
+        // iOS alpha/gamma flip near vertical, which swings azimuth ~180° and
+        // throws every object off-screen. When we see an impossible jump, we
+        // hold the current direction instead of following the glitch. A brief
+        // counter lets a SUSTAINED real change (e.g. you genuinely spun around)
+        // through after a few frames so we never get permanently stuck.
+        if (errDeg > 35 && rejectCount < 8) {
+          rejectCount++;
+          return vectorToHorizontal({ x: sx, y: sy, z: sz });
+        }
+        rejectCount = 0;
         // Gentle when nearly still, fast catch-up on real movement.
         const adaptive = Math.min(0.6, factor + (errDeg / 25) * (0.6 - factor));
         sx += (nx - sx) * adaptive;
         sy += (ny - sy) * adaptive;
         sz += (nz - sz) * adaptive;
-        // Renormalize so it stays a unit direction.
         const sl = Math.sqrt(sx * sx + sy * sy + sz * sz) || 1;
         sx /= sl; sy /= sl; sz /= sl;
       }
@@ -311,6 +323,7 @@ export function makeOrientationSmoother(factor = 0.12): OrientationSmoother {
     reset() {
       sx = 0; sy = 0; sz = 0;
       primed = false;
+      rejectCount = 0;
     },
   };
 }
