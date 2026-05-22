@@ -259,10 +259,6 @@ export function makeOrientationSmoother(factor = 0.06): OrientationSmoother {
   let ay = 0;
   let primed = false;
 
-  // Movements smaller than this (degrees) are treated as sensor jitter and
-  // ignored entirely, so the sky stays locked when you hold roughly still.
-  const DEAD_ZONE_DEG = 0.6;
-
   return {
     push(h: HorizontalCoord): HorizontalCoord {
       const azRad = h.az * DEG;
@@ -278,13 +274,13 @@ export function makeOrientationSmoother(factor = 0.06): OrientationSmoother {
         const curAz = Math.atan2(ax, ay) * RAD;
         const azErr = Math.abs(((h.az - curAz + 540) % 360) - 180);
         const err = Math.max(altErr, azErr);
-        // Hold completely still inside the dead zone — kills resting tremor.
-        if (err < DEAD_ZONE_DEG) {
-          const az0 = ((Math.atan2(ax, ay) * RAD) % 360 + 360) % 360;
-          return { alt: alt!, az: az0 };
-        }
-        // Adaptive smoothing: gentle when nearly still, fast catch-up on real
-        // movement so it never feels laggy.
+        // Soft jitter suppression: instead of fully FREEZING under a threshold
+        // (which makes the view snap back when you hold near an object and
+        // micro-move — objects appear to flicker/vanish), we just smooth very
+        // gently when nearly still and ramp up with real movement. The view
+        // keeps tracking continuously, so objects never pop.
+        //   err ~0°  → factor (very gentle)
+        //   err ~25° → ~0.6 (fast catch-up)
         const adaptive = Math.min(0.6, factor + (err / 25) * (0.6 - factor));
         alt = alt! + (h.alt - alt!) * adaptive;
         ax = ax + (nx - ax) * adaptive;

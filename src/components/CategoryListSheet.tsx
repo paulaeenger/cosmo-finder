@@ -69,7 +69,7 @@ export function CategoryListSheet({
             exit={{ y: 40, opacity: 0 }}
             transition={{ type: "spring", damping: 26, stiffness: 280 }}
             onClick={(e) => e.stopPropagation()}
-            className="relative max-h-[75vh] w-full max-w-md overflow-hidden rounded-t-[28px] border border-white/10 bg-ink-800 sm:rounded-[28px]"
+            className="relative max-h-[75vh] w-full max-w-md overflow-hidden rounded-t-[28px] border border-white/10 bg-gradient-to-b from-[#0a1226] via-[#070a14] to-[#03050b] sm:rounded-[28px]"
           >
             {/* Header */}
             <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">

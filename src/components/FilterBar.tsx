@@ -18,7 +18,7 @@ const CATEGORIES: Array<{
   label: string;
   icon: React.ReactNode;
 }> = [
-  { id: "planets", label: "Planets", icon: <Globe className="h-3.5 w-3.5" /> },
+  { id: "planets", label: "Solar System", icon: <Globe className="h-3.5 w-3.5" /> },
   { id: "stars", label: "Stars", icon: <Star className="h-3.5 w-3.5" /> },
   { id: "deep-sky", label: "Deep-Sky", icon: <Sparkles className="h-3.5 w-3.5" /> },
   { id: "satellites", label: "Satellites", icon: <SatIcon className="h-3.5 w-3.5" /> },

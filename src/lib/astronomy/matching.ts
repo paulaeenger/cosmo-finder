@@ -275,6 +275,7 @@ export function rankTonight(sky: SkyObject[], limit = 8): SkyObject[] {
   return [...sky]
     .filter((o) => !o.belowHorizon && o.alt > 10)
     .filter((o) => o.kind !== "constellation")
+    .filter((o) => o.kind !== "sun") // lighting engine, not a stargazing target
     .filter((o) => o.kind !== "satellite" || o.satellite?.lit)
     .map((o) => ({
       o,

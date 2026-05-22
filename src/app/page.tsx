@@ -85,7 +85,10 @@ export default function HomePage() {
       constellations: 0,
       satellites: 0,
     };
-    for (const o of equipmentFilteredSky) c[categoryFor(o.kind)]++;
+    for (const o of equipmentFilteredSky) {
+      if (o.kind === "sun") continue; // lighting engine, not a browsable target
+      c[categoryFor(o.kind)]++;
+    }
     return c;
   }, [equipmentFilteredSky]);
   const [tracked, setTracked] = useState<SkyObject | null>(null);
@@ -97,7 +100,7 @@ export default function HomePage() {
   const categoryObjects = useMemo(() => {
     if (!openCategory) return [];
     const inCat = equipmentFilteredSky.filter(
-      (o) => categoryFor(o.kind) === openCategory
+      (o) => categoryFor(o.kind) === openCategory && o.kind !== "sun"
     );
     if (openCategory === "stars") {
       return inCat.filter(
@@ -332,7 +335,7 @@ export default function HomePage() {
         category={openCategory}
         label={
           openCategory === "planets"
-            ? "Planets & Moon"
+            ? "Solar System"
             : openCategory === "stars"
             ? "Bright stars"
             : openCategory === "deep-sky"

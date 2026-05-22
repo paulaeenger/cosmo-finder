@@ -41,7 +41,7 @@ export function CalibrationCoach({ open, onClose, accuracy }: Props) {
             exit={{ y: 40, opacity: 0 }}
             transition={{ type: "spring", damping: 26, stiffness: 280 }}
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-md rounded-t-[28px] border border-white/10 bg-ink-800 px-6 pb-8 pt-6 sm:rounded-[28px]"
+            className="relative w-full max-w-md rounded-t-[28px] border border-white/10 bg-gradient-to-b from-[#0a1226] via-[#070a14] to-[#03050b] px-6 pb-8 pt-6 sm:rounded-[28px]"
           >
             <button
               onClick={onClose}
@@ -51,7 +51,7 @@ export function CalibrationCoach({ open, onClose, accuracy }: Props) {
               <X className="h-4 w-4" />
             </button>
 
-            <p className="flex items-center gap-2 text-[10px] uppercase tracking-[0.35em] text-gold-400 font-mono">
+            <p className="flex items-center gap-2 text-[10px] uppercase tracking-[0.3em] text-gold-400 font-mono">
               <Compass className="h-3.5 w-3.5" />
               Calibrate Compass
             </p>
