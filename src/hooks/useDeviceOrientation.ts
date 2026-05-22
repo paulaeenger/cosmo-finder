@@ -65,6 +65,20 @@ export function useDeviceOrientation() {
         }
       }
 
+      // The gyroscope (DeviceMotion) is gated separately on iOS. Request it too
+      // so orientation fusion has the gyro for smooth tracking. Non-fatal if it
+      // fails — we fall back to compass-only.
+      const MotionStatic = window.DeviceMotionEvent as
+        | { requestPermission?: () => Promise<string> }
+        | undefined;
+      if (MotionStatic && typeof MotionStatic.requestPermission === "function") {
+        try {
+          await MotionStatic.requestPermission();
+        } catch {
+          /* gyro optional */
+        }
+      }
+
       // Two events can fire — `deviceorientationabsolute` (true-north heading)
       // and plain `deviceorientation` (often a relative/arbitrary heading).
       // Listening to both lets their differing headings fight each other and

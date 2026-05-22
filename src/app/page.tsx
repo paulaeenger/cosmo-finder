@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { MapPin, Compass, Clock } from "lucide-react";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useDeviceOrientation } from "@/hooks/useDeviceOrientation";
+import { useFusedOrientation } from "@/hooks/useFusedOrientation";
 import { useSkyObjects } from "@/hooks/useSkyObjects";
 import { useSatellites } from "@/hooks/useSatellites";
 import { useSkyFilters, categoryFor, type FilterCategory } from "@/hooks/useSkyFilters";
@@ -15,6 +16,7 @@ import {
 } from "@/lib/astronomy/matching";
 import {
   deviceToVector,
+  vectorToHorizontal,
   makeOrientationSmoother,
   angularDistance,
   applyCalibration,
@@ -43,6 +45,7 @@ import { TrackingGuide } from "@/components/TrackingGuide";
 export default function HomePage() {
   const { position, error: geoError, loading: geoLoading, requestLocation } = useGeolocation();
   const { orientation, granted, error: orientationError, requestOrientation } = useDeviceOrientation();
+  const fused = useFusedOrientation(granted);
   const { satellites } = useSatellites();
   const [viewTime, setViewTime] = useState<Date | null>(null);
   const { sky, now } = useSkyObjects(position, satellites, viewTime);
@@ -128,16 +131,20 @@ export default function HomePage() {
   // jittering frame to frame. Smooths the 3D pointing VECTOR (stable near the
   // zenith) and returns alt/az. Created once.
   const smootherRef = useRef(makeOrientationSmoother(0.08));
-  // Device calibration: solved when the user aligns to a known object. Applied
-  // to every raw pointing vector so the whole sky lines up on their hardware.
+  // Device calibration: solved when the user aligns to a known object.
   const [calibration, setCalibration] = useState<Calibration>(IDENTITY_CALIBRATION);
   const rawVecRef = useRef<{ x: number; y: number; z: number } | null>(null);
   const pointing = useMemo(() => {
-    const vec = deviceToVector(
-      orientation.alpha,
-      orientation.beta,
-      orientation.gamma
-    );
+    if (fused.pointing) {
+      // Fused (gyro+compass) vector is already smooth and gimbal-stable — apply
+      // calibration and convert directly, no extra smoothing needed.
+      rawVecRef.current = fused.pointing;
+      const corrected = applyCalibration(calibration, fused.pointing);
+      return vectorToHorizontal(corrected);
+    }
+    // Fallback: compass-only path with the vector smoother (pre-fusion or if the
+    // gyro is unavailable).
+    const vec = deviceToVector(orientation.alpha, orientation.beta, orientation.gamma);
     if (!vec) {
       smootherRef.current.reset();
       rawVecRef.current = null;
@@ -146,7 +153,13 @@ export default function HomePage() {
     rawVecRef.current = vec;
     const corrected = applyCalibration(calibration, vec);
     return smootherRef.current.push(corrected);
-  }, [orientation.alpha, orientation.beta, orientation.gamma, calibration]);
+  }, [
+    fused.pointing,
+    orientation.alpha,
+    orientation.beta,
+    orientation.gamma,
+    calibration,
+  ]);
   // On entering manual, snapshot the current pointing so the view starts where
   // the user was already looking. On returning to live, clear it so the gyro
   // takes back over cleanly.
