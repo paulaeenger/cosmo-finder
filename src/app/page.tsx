@@ -15,6 +15,7 @@ import {
 } from "@/lib/astronomy/matching";
 import {
   deviceToVector,
+  deviceUpVector,
   makeOrientationSmoother,
   angularDistance,
   applyCalibration,
@@ -262,6 +263,20 @@ export default function HomePage() {
   // The direction SkyView renders: smooth animated view in live mode (falls
   // back to immediate pointing until the loop primes), user view in manual.
   const skyViewDir = skyMode === "manual" ? manualView : liveView ?? pointing;
+  // The phone's own up axis, used by the renderer as the screen-roll reference
+  // so the view follows the device's roll and stays stable through the zenith
+  // (world-up-derived roll spins ~180° at the pole). Calibrated with the same
+  // rotation as the look direction, then converted from coords' world frame
+  // (x=east, y=north, z=up) to the projection frame (x=east, y=up, z=north).
+  // Null in manual mode — SkyView synthesizes an upright reference there.
+  const viewUp = useMemo(() => {
+    if (skyMode !== "live") return null;
+    const u = deviceUpVector(orientation.alpha, orientation.beta, orientation.gamma);
+    if (!u) return null;
+    const c = applyCalibration(calibration, u);
+    if (!Number.isFinite(c.x) || !Number.isFinite(c.y) || !Number.isFinite(c.z)) return null;
+    return { x: c.x, y: c.z, z: c.y };
+  }, [orientation.alpha, orientation.beta, orientation.gamma, calibration, skyMode]);
   // Match: closest object to phone direction, using the FILTERED sky so
   // turning off "stars" makes the app identify planets/satellites instead.
   // If user is tracking something explicit, resolve to its live alt/az from
@@ -382,6 +397,7 @@ export default function HomePage() {
               <div className="relative">
                 <SkyView
                   view={skyViewDir}
+                  viewUp={viewUp}
                   sky={filteredSky}
                   trackedTarget={liveTracked}
                   onObjectTap={(o) => setDetail(o)}

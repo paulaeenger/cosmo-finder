@@ -4,7 +4,7 @@ import { useCamera } from "@/hooks/useCamera";
 import { Camera, CameraOff, Share2 } from "lucide-react";
 import { motion } from "framer-motion";
 import type { SkyObject } from "@/lib/astronomy/matching";
-import { project } from "@/lib/astronomy/projection";
+import { project, worldRefUp } from "@/lib/astronomy/projection";
 import constellationLines from "@/lib/data/constellation-lines.json";
 type Props = {
   /**
@@ -13,6 +13,13 @@ type Props = {
    * "manual" mode. Null while the compass is still calibrating.
    */
   view: { alt: number; az: number } | null;
+  /**
+   * The phone's own "up" axis as a world vector (x=east, y=north, z=up),
+   * from deviceUpVector(). Used as the screen-roll reference in live mode so
+   * the view follows the phone's roll and stays stable through the zenith.
+   * Null in manual mode (an upright world-up reference is synthesized).
+   */
+  viewUp?: { x: number; y: number; z: number } | null;
   sky: SkyObject[];
   trackedTarget?: SkyObject | null;
   onObjectTap?: (obj: SkyObject) => void;
@@ -49,6 +56,7 @@ type Props = {
  */
 export function SkyView({
   view: viewDir,
+  viewUp,
   sky,
   trackedTarget,
   onObjectTap,
@@ -281,6 +289,17 @@ export function SkyView({
         : null,
     [viewDir]
   );
+  // Roll reference for the projection basis. Live mode: the phone's own up axis
+  // (stable through the zenith). Manual mode / no sensor: synthesized world-up,
+  // swapping to north near vertical. Computed once per render, reused by every
+  // project() call so the whole frame shares one consistent basis.
+  const refUp = useMemo(
+    () =>
+      view
+        ? viewUp ?? worldRefUp(view.alt, view.az)
+        : { x: 0, y: 1, z: 0 },
+    [view, viewUp]
+  );
   // Project all visible objects. Rebuilds only when the catalog or the view
   // changes — not on the 2s twinkle tick.
   type Projected = { obj: SkyObject; x: number; y: number };
@@ -289,13 +308,13 @@ export function SkyView({
     const out: Projected[] = [];
     for (const obj of sky) {
       if (obj.alt < -2) continue;
-      const p = project(obj.alt, obj.az, view.alt, view.az, fovDeg, size.w, size.h);
+      const p = project(obj.alt, obj.az, view.alt, view.az, refUp, fovDeg, size.w, size.h);
       if (!p.visible) continue;
       if (p.x < -50 || p.x > size.w + 50 || p.y < -50 || p.y > size.h + 50) continue;
       out.push({ obj, x: p.x, y: p.y });
     }
     return out;
-  }, [sky, view, fovDeg, size.w, size.h]);
+  }, [sky, view, refUp, fovDeg, size.w, size.h]);
   // Project constellation line endpoints
   const lineSegments = useMemo<Array<{ a: { x: number; y: number }; b: { x: number; y: number } }>>(() => {
     if (!view) return [];
@@ -309,23 +328,23 @@ export function SkyView({
         const b = starByName.get(bName);
         if (!a || !b) continue;
         if (a.alt < -2 || b.alt < -2) continue;
-        const pa = project(a.alt, a.az, view.alt, view.az, fovDeg, size.w, size.h);
-        const pb = project(b.alt, b.az, view.alt, view.az, fovDeg, size.w, size.h);
+        const pa = project(a.alt, a.az, view.alt, view.az, refUp, fovDeg, size.w, size.h);
+        const pb = project(b.alt, b.az, view.alt, view.az, refUp, fovDeg, size.w, size.h);
         if (!pa.visible || !pb.visible) continue;
         out.push({ a: { x: pa.x, y: pa.y }, b: { x: pb.x, y: pb.y } });
       }
     }
     return out;
-  }, [starByName, view, fovDeg, size.w, size.h]);
+  }, [starByName, view, refUp, fovDeg, size.w, size.h]);
   // Horizon points (sample every 2°)
   const horizonPoints = useMemo<Array<{ x: number; y: number; visible: boolean }>>(() => {
     if (!view) return [];
     const out: Array<{ x: number; y: number; visible: boolean }> = [];
     for (let az = 0; az < 360; az += 2) {
-      out.push(project(0, az, view.alt, view.az, fovDeg, size.w, size.h));
+      out.push(project(0, az, view.alt, view.az, refUp, fovDeg, size.w, size.h));
     }
     return out;
-  }, [view, fovDeg, size.w, size.h]);
+  }, [view, refUp, fovDeg, size.w, size.h]);
   const cardinals = useMemo(
     () =>
       !view
@@ -337,7 +356,7 @@ export function SkyView({
             { label: "W", az: 270 },
           ].map((c) => ({
             label: c.label,
-            p: project(0, c.az, view.alt, view.az, fovDeg, size.w, size.h),
+            p: project(0, c.az, view.alt, view.az, refUp, fovDeg, size.w, size.h),
           })),
     [view, fovDeg, size.w, size.h]
   );
@@ -348,17 +367,17 @@ export function SkyView({
     for (const ringAlt of [30, 60]) {
       const pts: Array<{ x: number; y: number; visible: boolean }> = [];
       for (let az = 0; az < 360; az += 4) {
-        pts.push(project(ringAlt, az, view.alt, view.az, fovDeg, size.w, size.h));
+        pts.push(project(ringAlt, az, view.alt, view.az, refUp, fovDeg, size.w, size.h));
       }
       out.push(pts);
     }
     return out;
-  }, [view, fovDeg, size.w, size.h]);
+  }, [view, refUp, fovDeg, size.w, size.h]);
   // Ecliptic line (sample at multiple RAs converted to alt/az for current time)
   const ecliptic = useMemo(
     () =>
       view
-        ? computeEclipticPath(observerLat, observerLon, now, view, fovDeg, size.w, size.h)
+        ? computeEclipticPath(observerLat, observerLon, now, view, refUp, fovDeg, size.w, size.h)
         : [],
     [observerLat, observerLon, now, view, fovDeg, size.w, size.h]
   );
@@ -521,6 +540,7 @@ export function SkyView({
             observerLon={observerLon}
             now={now}
             pointing={view}
+            refUp={refUp}
             fovDeg={fovDeg}
             screenW={size.w}
             screenH={size.h}
@@ -830,6 +850,7 @@ export function SkyView({
           <ConstellationLabels
             starByName={starByName}
             pointing={view}
+            refUp={refUp}
             fovDeg={fovDeg}
             screenW={size.w}
             screenH={size.h}
@@ -1089,6 +1110,7 @@ function MilkyWayBand({
   observerLon,
   now,
   pointing,
+  refUp,
   fovDeg,
   screenW,
   screenH,
@@ -1098,6 +1120,7 @@ function MilkyWayBand({
   observerLon: number;
   now: Date;
   pointing: { alt: number; az: number };
+  refUp: { x: number; y: number; z: number };
   fovDeg: number;
   screenW: number;
   screenH: number;
@@ -1127,7 +1150,7 @@ function MilkyWayBand({
       now
     );
     if (altAz.alt < -5) continue;
-    const p = project(altAz.alt, altAz.az, pointing.alt, pointing.az, fovDeg, screenW, screenH);
+    const p = project(altAz.alt, altAz.az, pointing.alt, pointing.az, refUp, fovDeg, screenW, screenH);
     if (!p.visible) continue;
     if (p.x < -100 || p.x > screenW + 100 || p.y < -100 || p.y > screenH + 100) continue;
     const distFromCenter = Math.min(l, 360 - l);
@@ -1187,6 +1210,7 @@ function BackgroundStarfield({
 function ConstellationLabels({
   starByName,
   pointing,
+  refUp,
   fovDeg,
   screenW,
   screenH,
@@ -1194,6 +1218,7 @@ function ConstellationLabels({
 }: {
   starByName: Map<string, SkyObject>;
   pointing: { alt: number; az: number };
+  refUp: { x: number; y: number; z: number };
   fovDeg: number;
   screenW: number;
   screenH: number;
@@ -1218,7 +1243,7 @@ function ConstellationLabels({
     for (const name of stars) {
       const s = starByName.get(name);
       if (!s || s.alt < 0) continue;
-      const p = project(s.alt, s.az, pointing.alt, pointing.az, fovDeg, screenW, screenH);
+      const p = project(s.alt, s.az, pointing.alt, pointing.az, refUp, fovDeg, screenW, screenH);
       if (!p.visible) continue;
       points.push({ x: p.x, y: p.y });
     }
@@ -1282,6 +1307,7 @@ function computeEclipticPath(
   lon: number,
   now: Date,
   pointing: { alt: number; az: number },
+  refUp: { x: number; y: number; z: number },
   fovDeg: number,
   screenW: number,
   screenH: number
@@ -1297,7 +1323,7 @@ function computeEclipticPath(
     const dec = Math.asin(Math.sin(eps) * Math.sin(L)) * (180 / Math.PI);
     const altAz = eqToAltAz(raHrs, dec, lat, lon, now);
     if (altAz.alt < -5) continue;
-    const p = project(altAz.alt, altAz.az, pointing.alt, pointing.az, fovDeg, screenW, screenH);
+    const p = project(altAz.alt, altAz.az, pointing.alt, pointing.az, refUp, fovDeg, screenW, screenH);
     if (!p.visible) continue;
     if (p.x < -100 || p.x > screenW + 100 || p.y < -100 || p.y > screenH + 100) continue;
     out.push({ x: p.x, y: p.y });

@@ -36,6 +36,7 @@ export function project(
   objAz: number,
   phoneAlt: number,
   phoneAz: number,
+  refUp: { x: number; y: number; z: number },
   fovDeg: number,
   screenW: number,
   screenH: number
@@ -52,17 +53,18 @@ export function project(
   // - "right"   = screen +X axis at the pointing direction
   // - "up"      = screen +Y axis (toward sky-up)
   const forward = altAzToVec3(phoneAlt, phoneAz);
-  // Build the screen basis from a reference "up". Normally world-up works, but
-  // when the phone points near the zenith, forward becomes parallel to world-up
-  // and cross(forward, worldUp) collapses to ~zero — normalizing that produces
-  // garbage and ALL objects fly off-screen (the "everything disappears when I
-  // aim high" bug). So when forward is nearly vertical, switch the reference to
-  // north, which is well-defined there.
-  const worldUp: Vec3 = { x: 0, y: 1, z: 0 };
-  const north: Vec3 = { x: 0, y: 0, z: 1 };
-  // |forward · worldUp| near 1 means we're pointing nearly straight up/down.
-  const verticality = Math.abs(dot(forward, worldUp));
-  const reference = verticality > 0.999 ? north : worldUp;
+  // The screen roll comes from `refUp` — in live mode this is the phone's OWN
+  // up axis, so the image follows the phone's real roll and stays stable as the
+  // look direction crosses the zenith. (Deriving roll from world-up instead
+  // makes the sky spin ~180° at the zenith, because the screen-right axis is
+  // then tied to azimuth, which is singular at the pole.) The caller supplies
+  // a sane reference; we only guard the degenerate case where it is parallel to
+  // forward (cross would collapse), falling back to north then world-up.
+  let reference: Vec3 = refUp;
+  if (Math.abs(dot(forward, normalize(reference))) > 0.9995) {
+    const north: Vec3 = { x: 0, y: 0, z: 1 };
+    reference = Math.abs(dot(forward, north)) > 0.9995 ? { x: 0, y: 1, z: 0 } : north;
+  }
   const right = normalize(cross(forward, reference));
   const up = cross(right, forward);
 
@@ -105,6 +107,19 @@ export function project(
 // --- helpers ---
 
 type Vec3 = { x: number; y: number; z: number };
+
+/**
+ * Default roll reference for SYNTHESIZED views (manual touch mode, or any time
+ * the phone's real up axis is unavailable): world-up, swapping to north when
+ * the look direction is near the zenith so the basis stays well-defined. Live
+ * mode should instead pass the phone's own up axis (deviceUpVector) so the
+ * rendered roll follows the device.
+ */
+export function worldRefUp(phoneAlt: number, phoneAz: number): Vec3 {
+  const forward = altAzToVec3(phoneAlt, phoneAz);
+  const worldUp: Vec3 = { x: 0, y: 1, z: 0 };
+  return Math.abs(dot(forward, worldUp)) > 0.999 ? { x: 0, y: 0, z: 1 } : worldUp;
+}
 
 function altAzToVec3(altDeg: number, azDeg: number): Vec3 {
   const alt = altDeg * DEG;

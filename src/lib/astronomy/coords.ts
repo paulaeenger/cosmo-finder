@@ -218,6 +218,24 @@ export function deviceToVector(
   return matVec(m, { x: 0, y: 0, z: -1 });
 }
 
+/**
+ * The phone's own "up" axis (screen top / device +Y) expressed as a world
+ * vector (x=east, y=north, z=up). This is the correct roll reference for
+ * rendering: deriving screen roll from world-up makes the view spin ~180° as
+ * the look direction passes the zenith (azimuth is singular there), whereas the
+ * phone's own up axis stays well-defined, so the image tracks the phone's real
+ * roll smoothly through the zenith. Returns null if any angle is unavailable.
+ */
+export function deviceUpVector(
+  alpha: number | null,
+  beta: number | null,
+  gamma: number | null
+): { x: number; y: number; z: number } | null {
+  if (alpha == null || beta == null || gamma == null) return null;
+  const m = eulerToMatrix(alpha, beta, gamma);
+  return matVec(m, { x: 0, y: 1, z: 0 });
+}
+
 /** Convert a world pointing vector (x=east, y=north, z=up) to alt/az degrees. */
 export function vectorToHorizontal(v: Vec3): HorizontalCoord {
   const horiz = Math.sqrt(v.x * v.x + v.y * v.y);
