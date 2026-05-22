@@ -840,9 +840,15 @@ export function SkyView({
       {/* Compass + day/night status pill */}
       <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
         <div className="rounded-full bg-black/35 backdrop-blur-sm px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] font-mono text-white/80">
-          {cardinal(view.az)} {view.az.toFixed(0)}°
-          <span className="text-white/40 mx-1.5">·</span>
-          alt {view.alt.toFixed(0)}°
+          {view ? (
+            <>
+              {cardinal(view.az)} {view.az.toFixed(0)}°
+              <span className="text-white/40 mx-1.5">·</span>
+              alt {view.alt.toFixed(0)}°
+            </>
+          ) : (
+            "—"
+          )}
         </div>
         <div className="rounded-full bg-black/35 backdrop-blur-sm px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] font-mono text-white/80">
           {mode === "manual" ? "MANUAL" : phaseLabel(sunAlt)}
