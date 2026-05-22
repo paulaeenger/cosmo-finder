@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useCamera } from "@/hooks/useCamera";
+import { Camera, CameraOff } from "lucide-react";
 import { motion } from "framer-motion";
 import type { SkyObject } from "@/lib/astronomy/matching";
 import { project } from "@/lib/astronomy/projection";
@@ -59,6 +61,19 @@ export function SkyView({
   onPan,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [arOn, setArOn] = useState(false);
+  const camera = useCamera(videoRef);
+  // Keep AR state and the camera stream in sync.
+  const toggleAr = () => {
+    if (arOn) {
+      camera.stop();
+      setArOn(false);
+    } else {
+      camera.start();
+      setArOn(true);
+    }
+  };
   const [size, setSize] = useState({ w: 360, h: 600 });
   // Track container size for responsive rendering
   useEffect(() => {
@@ -319,12 +334,15 @@ export function SkyView({
       </div>
     );
   }
+  const arActive = arOn && camera.active;
   return (
     <div
       ref={containerRef}
       className="relative h-[60vh] w-full overflow-hidden rounded-3xl border border-white/10"
       style={{
-        background: `linear-gradient(180deg, ${skyGradient.top} 0%, ${skyGradient.middle} 60%, ${skyGradient.bottom} 100%)`,
+        background: arActive
+          ? "#000"
+          : `linear-gradient(180deg, ${skyGradient.top} 0%, ${skyGradient.middle} 60%, ${skyGradient.bottom} 100%)`,
         // manual: none (we own all gestures). live: manipulation removes the
         // browser's ~300ms double-tap-zoom wait so taps register instantly,
         // while still allowing the page to scroll.
@@ -334,6 +352,14 @@ export function SkyView({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
+      {/* Live camera feed (AR mode) — sits behind the SVG annotations. */}
+      <video
+        ref={videoRef}
+        playsInline
+        muted
+        className="absolute inset-0 h-full w-full object-cover"
+        style={{ display: arActive ? "block" : "none" }}
+      />
       <svg
         viewBox={`0 0 ${size.w} ${size.h}`}
         className="absolute inset-0 h-full w-full"
@@ -471,6 +497,10 @@ export function SkyView({
         {/* Stars */}
         {projected
           .filter((p) => p.obj.kind === "star")
+          // In AR we draw the real sky from the camera, so suppress the dense
+          // faint-star field and keep only the bright, recognisable stars as
+          // labelled anchors over the live image.
+          .filter((p) => !arActive || p.obj.mag <= 2.2)
           .map((p, i) => {
             const meta = starMetaFor(p.obj.name, p.obj.mag);
             const isTracked = trackedTarget?.name === p.obj.name;
@@ -721,6 +751,27 @@ export function SkyView({
           {mode === "manual" ? "MANUAL" : phaseLabel(sunAlt)}
         </div>
       </div>
+
+      {/* AR toggle */}
+      <button
+        onClick={toggleAr}
+        className={`absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full border px-3 py-2 text-[10px] uppercase tracking-[0.2em] font-mono backdrop-blur-sm transition ${
+          arActive
+            ? "border-gold-400/50 bg-gold-400/15 text-gold-400"
+            : "border-white/15 bg-black/40 text-white/70"
+        }`}
+        aria-pressed={arActive}
+      >
+        {arActive ? <CameraOff className="h-3.5 w-3.5" /> : <Camera className="h-3.5 w-3.5" />}
+        {arActive ? "AR on" : "AR"}
+      </button>
+
+      {/* Camera permission / error message */}
+      {arOn && camera.error && (
+        <div className="absolute inset-x-3 bottom-16 rounded-xl border border-white/10 bg-black/70 px-4 py-3 text-center text-[12px] text-white/75 backdrop-blur-sm">
+          {camera.error}
+        </div>
+      )}
     </div>
   );
 }
