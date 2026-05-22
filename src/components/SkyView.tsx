@@ -405,14 +405,15 @@ export function SkyView({
   // what the app's pointing direction is and where it places the Moon.
   const debugLine = useMemo(() => {
     if (!view) return "view: null";
-    const moonObj = sky.find((o) => o.kind === "moon");
-    const moonProj = projected.find((p) => p.obj.kind === "moon");
-    const moonPart = !moonObj
-      ? "moon:absent"
-      : moonProj
-      ? `moon@(${moonProj.x.toFixed(0)},${moonProj.y.toFixed(0)}) alt${moonObj.alt.toFixed(0)}`
-      : `moon CULLED alt${moonObj.alt.toFixed(0)} az${moonObj.az.toFixed(0)}`;
-    return `view alt${view.alt.toFixed(0)} az${view.az.toFixed(0)} | proj:${projected.length} | ${moonPart}`;
+    const fmt = (kind: string, label: string) => {
+      const obj = sky.find((o) => o.kind === kind);
+      if (!obj) return `${label}:absent`;
+      const pr = projected.find((p) => p.obj.kind === kind);
+      return pr
+        ? `${label}@(${pr.x.toFixed(0)},${pr.y.toFixed(0)})`
+        : `${label} CULLED a${obj.alt.toFixed(0)}`;
+    };
+    return `view a${view.alt.toFixed(0)} z${view.az.toFixed(0)} p:${projected.length} | ${fmt("sun", "sun")} | ${fmt("moon", "moon")}`;
   }, [view, sky, projected]);
   // What the crosshair is on: the projected object nearest screen center.
   // Used for the AR reticle readout ("pointing at X").
