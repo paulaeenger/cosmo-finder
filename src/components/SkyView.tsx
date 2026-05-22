@@ -491,15 +491,26 @@ export function SkyView({
                 <circle cx={p.x} cy={p.y} r={Math.max(12, radius * 6)} fill="transparent" />
                 {/* Tracked highlight ring (never twinkles) */}
                 {isTracked && (
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={meta.r * 3 + 3}
-                    fill="none"
-                    stroke="#e8c474"
-                    strokeWidth="1"
-                    opacity={0.9}
-                  />
+                  <>
+                    <circle
+                      className="track-ring"
+                      cx={p.x}
+                      cy={p.y}
+                      r={meta.r * 3 + 5}
+                      fill="none"
+                      stroke="#e8c474"
+                      strokeWidth="1.5"
+                    />
+                    <circle
+                      cx={p.x}
+                      cy={p.y}
+                      r={meta.r * 3 + 3}
+                      fill="none"
+                      stroke="#e8c474"
+                      strokeWidth="1"
+                      opacity={0.9}
+                    />
+                  </>
                 )}
                 {/* Twinkling visual group: halo, diffraction, body, core */}
                 <g className="star-twinkle" style={tw}>
@@ -628,14 +639,25 @@ export function SkyView({
                   <circle cx={p.x} cy={p.y} r={9} fill="url(#satGlow)" opacity={0.7} />
                 )}
                 {isTracked && (
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={11}
-                    fill="none"
-                    stroke="#e8c474"
-                    strokeWidth="1.2"
-                  />
+                  <>
+                    <circle
+                      className="track-ring"
+                      cx={p.x}
+                      cy={p.y}
+                      r={14}
+                      fill="none"
+                      stroke="#e8c474"
+                      strokeWidth="1.6"
+                    />
+                    <circle
+                      cx={p.x}
+                      cy={p.y}
+                      r={11}
+                      fill="none"
+                      stroke="#e8c474"
+                      strokeWidth="1.2"
+                    />
+                  </>
                 )}
                 <g transform={`translate(${p.x},${p.y}) rotate(45)`}>
                   <rect

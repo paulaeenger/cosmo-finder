@@ -252,12 +252,16 @@ export type OrientationSmoother = {
  * @param factor  0..1 — fraction of the NEW reading blended in each update.
  *                Lower = smoother but laggier. ~0.25 is a good phone default.
  */
-export function makeOrientationSmoother(factor = 0.12): OrientationSmoother {
+export function makeOrientationSmoother(factor = 0.06): OrientationSmoother {
   let alt: number | null = null;
   // Azimuth carried as a 2D unit-ish vector to survive the 0/360 wrap.
   let ax = 0;
   let ay = 0;
   let primed = false;
+
+  // Movements smaller than this (degrees) are treated as sensor jitter and
+  // ignored entirely, so the sky stays locked when you hold roughly still.
+  const DEAD_ZONE_DEG = 0.6;
 
   return {
     push(h: HorizontalCoord): HorizontalCoord {
@@ -270,17 +274,17 @@ export function makeOrientationSmoother(factor = 0.12): OrientationSmoother {
         ay = ny;
         primed = true;
       } else {
-        // Adaptive smoothing: tiny frame-to-frame changes are almost certainly
-        // sensor jitter, so smooth them HARD (steady sky). Large changes are
-        // the user actually moving the phone, so let those through quickly so
-        // it never feels laggy. We measure how far the new reading is from the
-        // current smoothed one and scale the blend factor up with that error.
         const altErr = Math.abs(h.alt - alt!);
-        // Azimuth error via the smoothed heading angle vs the new one.
         const curAz = Math.atan2(ax, ay) * RAD;
-        let azErr = Math.abs(((h.az - curAz + 540) % 360) - 180);
+        const azErr = Math.abs(((h.az - curAz + 540) % 360) - 180);
         const err = Math.max(altErr, azErr);
-        // factor at rest (small err) → ~factor; large err (>~25°) → ~0.6.
+        // Hold completely still inside the dead zone — kills resting tremor.
+        if (err < DEAD_ZONE_DEG) {
+          const az0 = ((Math.atan2(ax, ay) * RAD) % 360 + 360) % 360;
+          return { alt: alt!, az: az0 };
+        }
+        // Adaptive smoothing: gentle when nearly still, fast catch-up on real
+        // movement so it never feels laggy.
         const adaptive = Math.min(0.6, factor + (err / 25) * (0.6 - factor));
         alt = alt! + (h.alt - alt!) * adaptive;
         ax = ax + (nx - ax) * adaptive;

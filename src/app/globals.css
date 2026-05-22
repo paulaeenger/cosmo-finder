@@ -98,3 +98,18 @@ body {
   .star-twinkle { animation: none; }
 }
 
+/* Pulsing locator ring for the object you're tracking, so it's easy to spot
+   in a busy field. */
+@keyframes track-pulse {
+  0%, 100% { opacity: 0.9; transform: scale(1); }
+  50%      { opacity: 0.35; transform: scale(1.5); }
+}
+.track-ring {
+  animation: track-pulse 1.8s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+@media (prefers-reduced-motion: reduce) {
+  .track-ring { animation: none; }
+}
+

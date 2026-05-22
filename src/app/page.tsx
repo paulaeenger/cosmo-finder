@@ -248,18 +248,31 @@ export default function HomePage() {
               <SkyModeToggle mode={skyMode} onChange={setSkyMode} />
             )}
             {viewMode === "panoramic" && position ? (
-              <SkyView
-                view={skyViewDir}
-                sky={filteredSky}
-                trackedTarget={liveTracked}
-                onObjectTap={(o) => setDetail(o)}
-                observerLat={position.lat}
-                observerLon={position.lon}
-                now={now}
-                showConstellations={filters.constellations}
-                mode={skyMode}
-                onPan={handlePan}
-              />
+              <div className="relative">
+                <SkyView
+                  view={skyViewDir}
+                  sky={filteredSky}
+                  trackedTarget={liveTracked}
+                  onObjectTap={(o) => setDetail(o)}
+                  observerLat={position.lat}
+                  observerLon={position.lon}
+                  now={now}
+                  showConstellations={filters.constellations}
+                  mode={skyMode}
+                  onPan={handlePan}
+                />
+                {tracked && liveTracked && (
+                  <div className="pointer-events-none absolute inset-x-3 top-3 z-20">
+                    <div className="pointer-events-auto">
+                      <TrackingGuide
+                        target={liveTracked}
+                        pointing={pointing}
+                        onStop={() => setTracked(null)}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             ) : (
               <SkyCompass
                 pointing={pointing}
@@ -273,13 +286,6 @@ export default function HomePage() {
                 find it even when the planets filter is off. */}
             <SearchPanel sky={sky} onPick={(o) => setDetail(o)} />
             <TonightHighlights sky={filteredSky} onPick={(o) => setDetail(o)} />
-            {tracked && liveTracked && (
-              <TrackingGuide
-                target={liveTracked}
-                pointing={pointing}
-                onStop={() => setTracked(null)}
-              />
-            )}
             <Footer satCount={satellites.length} />
           </>
         )}
