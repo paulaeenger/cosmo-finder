@@ -52,8 +52,18 @@ export function project(
   // - "right"   = screen +X axis at the pointing direction
   // - "up"      = screen +Y axis (toward sky-up)
   const forward = altAzToVec3(phoneAlt, phoneAz);
+  // Build the screen basis from a reference "up". Normally world-up works, but
+  // when the phone points near the zenith, forward becomes parallel to world-up
+  // and cross(forward, worldUp) collapses to ~zero — normalizing that produces
+  // garbage and ALL objects fly off-screen (the "everything disappears when I
+  // aim high" bug). So when forward is nearly vertical, switch the reference to
+  // north, which is well-defined there.
   const worldUp: Vec3 = { x: 0, y: 1, z: 0 };
-  const right = normalize(cross(forward, worldUp));
+  const north: Vec3 = { x: 0, y: 0, z: 1 };
+  // |forward · worldUp| near 1 means we're pointing nearly straight up/down.
+  const verticality = Math.abs(dot(forward, worldUp));
+  const reference = verticality > 0.999 ? north : worldUp;
+  const right = normalize(cross(forward, reference));
   const up = cross(right, forward);
 
   // Project objVec into camera space
