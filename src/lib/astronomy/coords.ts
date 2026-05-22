@@ -198,7 +198,14 @@ export function deviceToVector(
 ): Vec3 | null {
   if (alpha == null || beta == null || gamma == null) return null;
   const m = eulerToMatrix(alpha, beta, gamma);
-  return matVec(m, { x: 0, y: 0, z: -1 });
+  // When the phone is held up to the sky in PORTRAIT, the direction you're
+  // aiming at is where the TOP EDGE of the phone points, i.e. device-frame
+  // (0, 1, 0) — NOT straight out the back (0, 0, -1). The old "back" axis is
+  // only correct when the phone lies flat; as you tilt up to view the sky it
+  // inverted the altitude (computed downward while you aimed up). Verified
+  // against real device sensor logs: the +Y (top) axis tracks tilt correctly
+  // (more tilt → higher altitude) while -Z gave negative altitudes.
+  return matVec(m, { x: 0, y: 1, z: 0 });
 }
 
 /** Convert a world pointing vector (x=east, y=north, z=up) to alt/az degrees. */
