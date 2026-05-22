@@ -400,6 +400,20 @@ export function SkyView({
     );
   }
   const arActive = arOn && camera.active;
+  // TEMP DEBUG v2: capture the view direction and the Moon's projection status
+  // at all times (not just AR), to catch the disappearing-when-high bug. Shows
+  // what the app's pointing direction is and where it places the Moon.
+  const debugLine = useMemo(() => {
+    if (!view) return "view: null";
+    const moonObj = sky.find((o) => o.kind === "moon");
+    const moonProj = projected.find((p) => p.obj.kind === "moon");
+    const moonPart = !moonObj
+      ? "moon:absent"
+      : moonProj
+      ? `moon@(${moonProj.x.toFixed(0)},${moonProj.y.toFixed(0)}) alt${moonObj.alt.toFixed(0)}`
+      : `moon CULLED alt${moonObj.alt.toFixed(0)} az${moonObj.az.toFixed(0)}`;
+    return `view alt${view.alt.toFixed(0)} az${view.az.toFixed(0)} | proj:${projected.length} | ${moonPart}`;
+  }, [view, sky, projected]);
   // What the crosshair is on: the projected object nearest screen center.
   // Used for the AR reticle readout ("pointing at X").
   const centerTarget = useMemo(() => {
@@ -869,6 +883,11 @@ export function SkyView({
           </div>
         </div>
       )}
+
+      {/* TEMP DEBUG v2 readout — remove after diagnosis */}
+      <div className="pointer-events-none absolute left-2 top-2 z-30 rounded bg-black/75 px-2 py-1 text-[9px] font-mono text-emerald-300">
+        {debugLine}
+      </div>
 
       {/* AR controls */}
       <div className="absolute bottom-3 right-3 flex items-center gap-2">
