@@ -186,6 +186,31 @@ function matVec(m: Mat3, v: Vec3): Vec3 {
  * Returns alt/az for the direction the BACK of the phone points — i.e. where
  * the user aims the device at the sky. Null if alpha/beta/gamma unavailable.
  */
+/**
+ * Like deviceToHorizontalFull, but returns the raw world-space pointing VECTOR
+ * (x=east, y=north, z=up) instead of alt/az. Smoothing a vector avoids the
+ * azimuth blow-up that happens near the zenith, so this is what we smooth.
+ */
+export function deviceToVector(
+  alpha: number | null,
+  beta: number | null,
+  gamma: number | null
+): Vec3 | null {
+  if (alpha == null || beta == null || gamma == null) return null;
+  const m = eulerToMatrix(alpha, beta, gamma);
+  return matVec(m, { x: 0, y: 0, z: -1 });
+}
+
+/** Convert a world pointing vector (x=east, y=north, z=up) to alt/az degrees. */
+export function vectorToHorizontal(v: Vec3): HorizontalCoord {
+  const horiz = Math.sqrt(v.x * v.x + v.y * v.y);
+  const altRad = Math.atan2(v.z, horiz);
+  const azRad = Math.atan2(-v.x, v.y);
+  let az = azRad * RAD;
+  az = ((az % 360) + 360) % 360;
+  return { alt: altRad * RAD, az };
+}
+
 export function deviceToHorizontalFull(
   alpha: number | null,
   beta: number | null,
@@ -242,58 +267,49 @@ export function deviceToHorizontalFull(
 // ============================================================================
 
 export type OrientationSmoother = {
-  push: (h: HorizontalCoord) => HorizontalCoord;
+  /** Push a raw pointing VECTOR; get back smoothed alt/az. */
+  push: (v: Vec3) => HorizontalCoord;
   reset: () => void;
 };
 
 /**
- * Create a stateful exponential smoother for alt/az.
+ * Stateful smoother that operates on the 3D pointing VECTOR rather than alt/az
+ * angles. This is the key to stability when pointing near straight up: azimuth
+ * becomes hypersensitive near the zenith (a tiny wobble swings it wildly), but
+ * the direction vector moves smoothly everywhere. We low-pass the vector, then
+ * convert to alt/az only at the very end.
  *
- * @param factor  0..1 — fraction of the NEW reading blended in each update.
- *                Lower = smoother but laggier. ~0.25 is a good phone default.
+ * @param factor  0..1 base blend when nearly still. Lower = steadier.
  */
-export function makeOrientationSmoother(factor = 0.06): OrientationSmoother {
-  let alt: number | null = null;
-  // Azimuth carried as a 2D unit-ish vector to survive the 0/360 wrap.
-  let ax = 0;
-  let ay = 0;
+export function makeOrientationSmoother(factor = 0.12): OrientationSmoother {
+  let sx = 0, sy = 0, sz = 0;
   let primed = false;
 
   return {
-    push(h: HorizontalCoord): HorizontalCoord {
-      const azRad = h.az * DEG;
-      const nx = Math.sin(azRad);
-      const ny = Math.cos(azRad);
+    push(v: Vec3): HorizontalCoord {
+      // Normalize the incoming vector.
+      const l = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z) || 1;
+      const nx = v.x / l, ny = v.y / l, nz = v.z / l;
       if (!primed) {
-        alt = h.alt;
-        ax = nx;
-        ay = ny;
+        sx = nx; sy = ny; sz = nz;
         primed = true;
       } else {
-        const altErr = Math.abs(h.alt - alt!);
-        const curAz = Math.atan2(ax, ay) * RAD;
-        const azErr = Math.abs(((h.az - curAz + 540) % 360) - 180);
-        const err = Math.max(altErr, azErr);
-        // Soft jitter suppression: instead of fully FREEZING under a threshold
-        // (which makes the view snap back when you hold near an object and
-        // micro-move — objects appear to flicker/vanish), we just smooth very
-        // gently when nearly still and ramp up with real movement. The view
-        // keeps tracking continuously, so objects never pop.
-        //   err ~0°  → factor (very gentle)
-        //   err ~25° → ~0.6 (fast catch-up)
-        const adaptive = Math.min(0.6, factor + (err / 25) * (0.6 - factor));
-        alt = alt! + (h.alt - alt!) * adaptive;
-        ax = ax + (nx - ax) * adaptive;
-        ay = ay + (ny - ay) * adaptive;
+        // Angular error between smoothed and new direction (dot → angle).
+        const dotp = Math.max(-1, Math.min(1, sx * nx + sy * ny + sz * nz));
+        const errDeg = Math.acos(dotp) * RAD;
+        // Gentle when nearly still, fast catch-up on real movement.
+        const adaptive = Math.min(0.6, factor + (errDeg / 25) * (0.6 - factor));
+        sx += (nx - sx) * adaptive;
+        sy += (ny - sy) * adaptive;
+        sz += (nz - sz) * adaptive;
+        // Renormalize so it stays a unit direction.
+        const sl = Math.sqrt(sx * sx + sy * sy + sz * sz) || 1;
+        sx /= sl; sy /= sl; sz /= sl;
       }
-      let az = Math.atan2(ax, ay) * RAD;
-      az = ((az % 360) + 360) % 360;
-      return { alt: alt!, az };
+      return vectorToHorizontal({ x: sx, y: sy, z: sz });
     },
     reset() {
-      alt = null;
-      ax = 0;
-      ay = 0;
+      sx = 0; sy = 0; sz = 0;
       primed = false;
     },
   };

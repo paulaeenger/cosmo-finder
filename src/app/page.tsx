@@ -14,7 +14,7 @@ import {
   type MatchResult,
 } from "@/lib/astronomy/matching";
 import {
-  deviceToHorizontalFull,
+  deviceToVector,
   makeOrientationSmoother,
   angularDistance,
 } from "@/lib/astronomy/coords";
@@ -119,26 +119,21 @@ export default function HomePage() {
   // view no longer drifts with small hand movements.
   const [manualView, setManualView] = useState<{ alt: number; az: number } | null>(null);
   // Stateful smoother — persists across renders so the view glides instead of
-  // jittering frame to frame. Created once.
-  const smootherRef = useRef(makeOrientationSmoother(0.25));
+  // jittering frame to frame. Smooths the 3D pointing VECTOR (stable near the
+  // zenith) and returns alt/az. Created once.
+  const smootherRef = useRef(makeOrientationSmoother(0.12));
   const pointing = useMemo(() => {
-    const raw = deviceToHorizontalFull(
+    const vec = deviceToVector(
       orientation.alpha,
       orientation.beta,
-      orientation.gamma,
-      orientation.screenAngle
+      orientation.gamma
     );
-    if (!raw) {
+    if (!vec) {
       smootherRef.current.reset();
       return null;
     }
-    return smootherRef.current.push(raw);
-  }, [
-    orientation.alpha,
-    orientation.beta,
-    orientation.gamma,
-    orientation.screenAngle,
-  ]);
+    return smootherRef.current.push(vec);
+  }, [orientation.alpha, orientation.beta, orientation.gamma]);
   // On entering manual, snapshot the current pointing so the view starts where
   // the user was already looking. On returning to live, clear it so the gyro
   // takes back over cleanly.
