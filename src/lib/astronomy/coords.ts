@@ -361,7 +361,7 @@ export type OrientationSmoother = {
  *
  * @param factor  0..1 base blend when nearly still. Lower = steadier.
  */
-export function makeOrientationSmoother(factor = 0.12): OrientationSmoother {
+export function makeOrientationSmoother(factor = 0.08): OrientationSmoother {
   let sx = 0, sy = 0, sz = 0;
   let primed = false;
   // Candidate tracking: a large jump is only accepted once a NEW orientation is

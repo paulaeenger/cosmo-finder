@@ -419,7 +419,7 @@ export function SkyView({
   return (
     <div
       ref={containerRef}
-      className="relative h-[60vh] w-full overflow-hidden rounded-3xl border border-white/10"
+      className="relative h-[55vh] w-full overflow-hidden rounded-3xl border border-white/10"
       style={{
         background: arActive
           ? "#000"

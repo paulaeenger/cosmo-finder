@@ -127,7 +127,7 @@ export default function HomePage() {
   // Stateful smoother — persists across renders so the view glides instead of
   // jittering frame to frame. Smooths the 3D pointing VECTOR (stable near the
   // zenith) and returns alt/az. Created once.
-  const smootherRef = useRef(makeOrientationSmoother(0.12));
+  const smootherRef = useRef(makeOrientationSmoother(0.08));
   // Device calibration: solved when the user aligns to a known object. Applied
   // to every raw pointing vector so the whole sky lines up on their hardware.
   const [calibration, setCalibration] = useState<Calibration>(IDENTITY_CALIBRATION);
