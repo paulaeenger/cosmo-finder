@@ -20,15 +20,25 @@ export function useCamera(videoRef: React.RefObject<HTMLVideoElement | null>) {
     error: null,
     requesting: false,
   });
+  // Rough average brightness of the current frame, 0 (black) .. 1 (white).
+  // Used for dark-sky blending: when the camera sees almost nothing (deep
+  // night), the UI fades the drawn sky back in so it isn't a black void.
+  const [brightness, setBrightness] = useState(1);
   const streamRef = useRef<MediaStream | null>(null);
+  const sampleRef = useRef<number | null>(null);
 
   const stop = useCallback(() => {
+    if (sampleRef.current != null) {
+      clearInterval(sampleRef.current);
+      sampleRef.current = null;
+    }
     if (streamRef.current) {
       for (const track of streamRef.current.getTracks()) track.stop();
       streamRef.current = null;
     }
     if (videoRef.current) videoRef.current.srcObject = null;
     setState({ active: false, error: null, requesting: false });
+    setBrightness(1);
   }, [videoRef]);
 
   const start = useCallback(async () => {
@@ -51,6 +61,30 @@ export function useCamera(videoRef: React.RefObject<HTMLVideoElement | null>) {
         await videoRef.current.play().catch(() => {});
       }
       setState({ active: true, requesting: false, error: null });
+
+      // Sample average frame brightness ~twice a second on a tiny offscreen
+      // canvas. Cheap, and lets the UI blend the drawn sky in when it's dark.
+      const sampleCanvas = document.createElement("canvas");
+      sampleCanvas.width = 16;
+      sampleCanvas.height = 16;
+      const sctx = sampleCanvas.getContext("2d", { willReadFrequently: true });
+      sampleRef.current = window.setInterval(() => {
+        const v = videoRef.current;
+        if (!v || !sctx || v.readyState < 2) return;
+        try {
+          sctx.drawImage(v, 0, 0, 16, 16);
+          const { data } = sctx.getImageData(0, 0, 16, 16);
+          let sum = 0;
+          for (let i = 0; i < data.length; i += 4) {
+            // Perceptual luma approximation.
+            sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+          }
+          const avg = sum / (data.length / 4) / 255;
+          setBrightness(avg);
+        } catch {
+          /* drawImage can throw before the first frame; ignore */
+        }
+      }, 500);
     } catch (err) {
       const name = (err as { name?: string })?.name;
       const msg =
@@ -66,5 +100,5 @@ export function useCamera(videoRef: React.RefObject<HTMLVideoElement | null>) {
   // Clean up on unmount.
   useEffect(() => stop, [stop]);
 
-  return { ...state, start, stop };
+  return { ...state, brightness, start, stop };
 }

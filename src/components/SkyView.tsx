@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useCamera } from "@/hooks/useCamera";
-import { Camera, CameraOff } from "lucide-react";
+import { Camera, CameraOff, Share2 } from "lucide-react";
 import { motion } from "framer-motion";
 import type { SkyObject } from "@/lib/astronomy/matching";
 import { project } from "@/lib/astronomy/projection";
@@ -62,7 +62,9 @@ export function SkyView({
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
   const [arOn, setArOn] = useState(false);
+  const [capturing, setCapturing] = useState(false);
   const camera = useCamera(videoRef);
   // Keep AR state and the camera stream in sync.
   const toggleAr = () => {
@@ -72,6 +74,69 @@ export function SkyView({
     } else {
       camera.start();
       setArOn(true);
+    }
+  };
+  // Capture the AR view (camera frame + annotations) and share/download it.
+  const captureAr = async () => {
+    const video = videoRef.current;
+    const svg = svgRef.current;
+    if (!video || !svg) return;
+    setCapturing(true);
+    try {
+      const w = size.w;
+      const h = size.h;
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      // 1) Draw the camera frame, cover-style (match object-cover).
+      const vw = video.videoWidth || w;
+      const vh = video.videoHeight || h;
+      const scale = Math.max(w / vw, h / vh);
+      const dw = vw * scale;
+      const dh = vh * scale;
+      ctx.drawImage(video, (w - dw) / 2, (h - dh) / 2, dw, dh);
+
+      // 2) Draw the SVG annotations on top.
+      const xml = new XMLSerializer().serializeToString(svg);
+      const svg64 = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(xml)));
+      await new Promise<void>((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve();
+        };
+        img.onerror = () => resolve();
+        img.src = svg64;
+      });
+
+      // 3) Watermark.
+      ctx.font = "12px monospace";
+      ctx.fillStyle = "rgba(232,196,116,0.9)";
+      ctx.fillText("Cosmos Finder", 12, h - 14);
+
+      const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/png"));
+      if (!blob) return;
+      const file = new File([blob], "cosmos-finder.png", { type: "image/png" });
+
+      // Prefer the native share sheet; fall back to download.
+      const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean };
+      if (nav.share && nav.canShare?.({ files: [file] })) {
+        await nav.share({ files: [file], title: "Cosmos Finder" });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "cosmos-finder.png";
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch {
+      /* user cancelled share or capture failed — silent */
+    } finally {
+      setCapturing(false);
     }
   };
   const [size, setSize] = useState({ w: 360, h: 600 });
@@ -335,6 +400,22 @@ export function SkyView({
     );
   }
   const arActive = arOn && camera.active;
+  // What the crosshair is on: the projected object nearest screen center.
+  // Used for the AR reticle readout ("pointing at X").
+  const centerTarget = useMemo(() => {
+    if (!arActive) return null;
+    const cx = size.w / 2;
+    const cy = size.h / 2;
+    let best: { obj: SkyObject; d: number } | null = null;
+    for (const p of projected) {
+      const dx = p.x - cx;
+      const dy = p.y - cy;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      // Only count objects reasonably near the center crosshair.
+      if (d < 70 && (!best || d < best.d)) best = { obj: p.obj, d };
+    }
+    return best?.obj ?? null;
+  }, [arActive, projected, size.w, size.h]);
   return (
     <div
       ref={containerRef}
@@ -360,7 +441,21 @@ export function SkyView({
         className="absolute inset-0 h-full w-full object-cover"
         style={{ display: arActive ? "block" : "none" }}
       />
+      {/* Dark-sky blend: when the camera sees mostly black (deep night), fade
+          the drawn sky gradient back in so AR isn't an empty void. Opacity
+          ramps up as brightness drops below ~12%. */}
+      {arActive && (
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: `linear-gradient(180deg, ${skyGradient.top} 0%, ${skyGradient.middle} 60%, ${skyGradient.bottom} 100%)`,
+            opacity: Math.max(0, Math.min(1, (0.12 - camera.brightness) / 0.12)),
+            transition: "opacity 0.6s ease",
+          }}
+        />
+      )}
       <svg
+        ref={svgRef}
         viewBox={`0 0 ${size.w} ${size.h}`}
         className="absolute inset-0 h-full w-full"
         preserveAspectRatio="xMidYMid slice"
@@ -499,8 +594,10 @@ export function SkyView({
           .filter((p) => p.obj.kind === "star")
           // In AR we draw the real sky from the camera, so suppress the dense
           // faint-star field and keep only the bright, recognisable stars as
-          // labelled anchors over the live image.
-          .filter((p) => !arActive || p.obj.mag <= 2.2)
+          // labelled anchors over the live image. But when the camera sees only
+          // darkness (deep night), we're blending the drawn sky back in, so let
+          // the full starfield return.
+          .filter((p) => !arActive || camera.brightness < 0.12 || p.obj.mag <= 2.2)
           .map((p, i) => {
             const meta = starMetaFor(p.obj.name, p.obj.mag);
             const isTracked = trackedTarget?.name === p.obj.name;
@@ -752,19 +849,47 @@ export function SkyView({
         </div>
       </div>
 
-      {/* AR toggle */}
-      <button
-        onClick={toggleAr}
-        className={`absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full border px-3 py-2 text-[10px] uppercase tracking-[0.2em] font-mono backdrop-blur-sm transition ${
-          arActive
-            ? "border-gold-400/50 bg-gold-400/15 text-gold-400"
-            : "border-white/15 bg-black/40 text-white/70"
-        }`}
-        aria-pressed={arActive}
-      >
-        {arActive ? <CameraOff className="h-3.5 w-3.5" /> : <Camera className="h-3.5 w-3.5" />}
-        {arActive ? "AR on" : "AR"}
-      </button>
+      {/* AR center reticle + "pointing at" readout */}
+      {arActive && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div className="relative flex flex-col items-center">
+            <div className="h-10 w-10 rounded-full border border-white/40" />
+            <div className="absolute left-1/2 top-1/2 h-3 w-px -translate-x-1/2 -translate-y-1/2 bg-white/40" />
+            <div className="absolute left-1/2 top-1/2 h-px w-3 -translate-x-1/2 -translate-y-1/2 bg-white/40" />
+            {centerTarget && (
+              <div className="absolute top-12 whitespace-nowrap rounded-full bg-black/55 px-3 py-1 text-[11px] font-mono text-white/90 backdrop-blur-sm">
+                {centerTarget.name}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* AR controls */}
+      <div className="absolute bottom-3 right-3 flex items-center gap-2">
+        {arActive && (
+          <button
+            onClick={captureAr}
+            disabled={capturing}
+            className="flex items-center gap-1.5 rounded-full border border-white/15 bg-black/40 px-3 py-2 text-[10px] uppercase tracking-[0.2em] font-mono text-white/70 backdrop-blur-sm transition disabled:opacity-50"
+          >
+            <Share2 className="h-3.5 w-3.5" />
+            {capturing ? "…" : "Share"}
+          </button>
+        )}
+        <button
+          onClick={toggleAr}
+          className={`flex items-center gap-1.5 rounded-full border px-3 py-2 text-[10px] uppercase tracking-[0.2em] font-mono backdrop-blur-sm transition ${
+            arActive
+              ? "border-gold-400/50 bg-gold-400/15 text-gold-400"
+              : "border-white/15 bg-black/40 text-white/70"
+          }`}
+          aria-pressed={arActive}
+        >
+          {arActive ? <CameraOff className="h-3.5 w-3.5" /> : <Camera className="h-3.5 w-3.5" />}
+          {arActive ? "AR on" : "AR"}
+        </button>
+      </div>
 
       {/* Camera permission / error message */}
       {arOn && camera.error && (
