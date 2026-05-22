@@ -849,15 +849,20 @@ export function SkyView({
         </div>
       </div>
 
-      {/* AR center reticle + "pointing at" readout */}
+      {/* AR center reticle + "pointing at" readout. Kept hollow with a clear
+          center and short outer ticks so a centered object shows THROUGH it
+          rather than being covered by the marker. */}
       {arActive && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <div className="relative flex flex-col items-center">
-            <div className="h-10 w-10 rounded-full border border-white/40" />
-            <div className="absolute left-1/2 top-1/2 h-3 w-px -translate-x-1/2 -translate-y-1/2 bg-white/40" />
-            <div className="absolute left-1/2 top-1/2 h-px w-3 -translate-x-1/2 -translate-y-1/2 bg-white/40" />
+            <div className="h-12 w-12 rounded-full border border-white/30" />
+            {/* Four short ticks pointing inward, leaving the center clear */}
+            <div className="absolute left-1/2 top-0 h-2 w-px -translate-x-1/2 bg-white/40" />
+            <div className="absolute bottom-0 left-1/2 h-2 w-px -translate-x-1/2 bg-white/40" />
+            <div className="absolute left-0 top-1/2 h-px w-2 -translate-y-1/2 bg-white/40" />
+            <div className="absolute right-0 top-1/2 h-px w-2 -translate-y-1/2 bg-white/40" />
             {centerTarget && (
-              <div className="absolute top-12 whitespace-nowrap rounded-full bg-black/55 px-3 py-1 text-[11px] font-mono text-white/90 backdrop-blur-sm">
+              <div className="absolute top-14 whitespace-nowrap rounded-full bg-black/55 px-3 py-1 text-[11px] font-mono text-white/90 backdrop-blur-sm">
                 {centerTarget.name}
               </div>
             )}
