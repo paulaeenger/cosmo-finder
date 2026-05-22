@@ -27,6 +27,7 @@ import { TonightHighlights } from "@/components/TonightHighlights";
 import { ObjectDetail } from "@/components/ObjectDetail";
 import { SatelliteAlert } from "@/components/SatelliteAlert";
 import { FilterBar } from "@/components/FilterBar";
+import { CategoryListSheet } from "@/components/CategoryListSheet";
 import { SkyConditionsBanner } from "@/components/SkyConditionsBanner";
 import { TimeScrubber } from "@/components/TimeScrubber";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
@@ -88,6 +89,23 @@ export default function HomePage() {
     return c;
   }, [equipmentFilteredSky]);
   const [tracked, setTracked] = useState<SkyObject | null>(null);
+  // Which category list sheet is open (tap a filter chip to view its objects).
+  const [openCategory, setOpenCategory] = useState<FilterCategory | null>(null);
+  // Objects belonging to the open category. For stars we show only the bright
+  // NAMED ones (a raw list of dozens of catalog stars isn't scannable); other
+  // categories show everything.
+  const categoryObjects = useMemo(() => {
+    if (!openCategory) return [];
+    const inCat = equipmentFilteredSky.filter(
+      (o) => categoryFor(o.kind) === openCategory
+    );
+    if (openCategory === "stars") {
+      return inCat.filter(
+        (o) => o.mag <= 2.2 && !/^(HIP|HD|HR|TYC|Gliese|GJ)\b/i.test(o.name)
+      );
+    }
+    return inCat;
+  }, [openCategory, equipmentFilteredSky]);
   const [detail, setDetail] = useState<SkyObject | null>(null);
   const [viewMode, setViewMode] = useState<"panoramic" | "instrument">("panoramic");
   // Live vs Manual: in manual the gyroscope is paused and touch drives the view.
@@ -240,6 +258,7 @@ export default function HomePage() {
               filters={filters}
               counts={counts}
               onToggle={toggle}
+              onOpenCategory={(cat) => setOpenCategory(cat)}
               onReset={reset}
               allOn={allOn}
             />
@@ -307,6 +326,29 @@ export default function HomePage() {
         open={showCalibration}
         onClose={() => setShowCalibration(false)}
         accuracy={orientation.compassAccuracy}
+      />
+      <CategoryListSheet
+        open={openCategory !== null}
+        category={openCategory}
+        label={
+          openCategory === "planets"
+            ? "Planets & Moon"
+            : openCategory === "stars"
+            ? "Bright stars"
+            : openCategory === "deep-sky"
+            ? "Deep-sky objects"
+            : openCategory === "satellites"
+            ? "Satellites"
+            : ""
+        }
+        objects={categoryObjects}
+        visible={openCategory ? filters[openCategory] : true}
+        onToggleVisible={() => openCategory && toggle(openCategory)}
+        onPick={(o) => {
+          setOpenCategory(null);
+          setDetail(o);
+        }}
+        onClose={() => setOpenCategory(null)}
       />
     </main>
   );

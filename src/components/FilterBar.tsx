@@ -8,6 +8,7 @@ type Props = {
   filters: FilterState;
   counts: Record<FilterCategory, number>;
   onToggle: (cat: FilterCategory) => void;
+  onOpenCategory: (cat: FilterCategory) => void;
   onReset: () => void;
   allOn: boolean;
 };
@@ -24,7 +25,7 @@ const CATEGORIES: Array<{
   { id: "constellations", label: "Lines", icon: <Spline className="h-3.5 w-3.5" /> },
 ];
 
-export function FilterBar({ filters, counts, onToggle, onReset, allOn }: Props) {
+export function FilterBar({ filters, counts, onToggle, onOpenCategory, onReset, allOn }: Props) {
   return (
     <section
       aria-label="Sky object filters"
@@ -34,6 +35,12 @@ export function FilterBar({ filters, counts, onToggle, onReset, allOn }: Props) 
         {CATEGORIES.map((cat) => {
           const on = filters[cat.id];
           const count = counts[cat.id] ?? 0;
+          // "Lines" (constellations) has no object list — keep it a pure toggle.
+          // Everything else opens its list sheet on tap.
+          const handleClick =
+            cat.id === "constellations"
+              ? () => onToggle(cat.id)
+              : () => onOpenCategory(cat.id);
           return (
             <FilterChip
               key={cat.id}
@@ -41,7 +48,7 @@ export function FilterBar({ filters, counts, onToggle, onReset, allOn }: Props) 
               label={cat.label}
               count={count}
               active={on}
-              onClick={() => onToggle(cat.id)}
+              onClick={handleClick}
             />
           );
         })}
