@@ -131,17 +131,109 @@ export default function HomePage() {
   // Device calibration: solved when the user aligns to a known object.
   const [calibration, setCalibration] = useState<Calibration>(IDENTITY_CALIBRATION);
   const rawVecRef = useRef<{ x: number; y: number; z: number } | null>(null);
+  // The immediate sensor pointing (calibrated). Used for logic (matching, the
+  // manual snapshot). The smoother here is light; the RENDER LOOP below does the
+  // visual smoothing at a steady 60fps.
+  const targetVecRef = useRef<{ x: number; y: number; z: number } | null>(null);
   const pointing = useMemo(() => {
     const vec = deviceToVector(orientation.alpha, orientation.beta, orientation.gamma);
     if (!vec) {
       smootherRef.current.reset();
       rawVecRef.current = null;
+      targetVecRef.current = null;
       return null;
     }
     rawVecRef.current = vec;
     const corrected = applyCalibration(calibration, vec);
+    // Feed the render loop's target (raw calibrated vector — the loop smooths).
+    if (
+      Number.isFinite(corrected.x) &&
+      Number.isFinite(corrected.y) &&
+      Number.isFinite(corrected.z)
+    ) {
+      targetVecRef.current = corrected;
+    }
     return smootherRef.current.push(corrected);
   }, [orientation.alpha, orientation.beta, orientation.gamma, calibration]);
+
+  // RENDER-LOOP INTERPOLATION. Rendering runs on its own steady 60fps loop that
+  // eases a display vector toward the latest sensor target. This decouples the
+  // visual motion from the irregular, jittery sensor update rate, so the sky
+  // glides continuously instead of stepping. The sensor math is untouched.
+  const [liveView, setLiveView] = useState<{ alt: number; az: number } | null>(null);
+  const dispVecRef = useRef<{ x: number; y: number; z: number } | null>(null);
+  const candVecRef = useRef<{ x: number; y: number; z: number } | null>(null);
+  const candCountRef = useRef(0);
+  useEffect(() => {
+    if (skyMode !== "live") return; // manual mode is touch-driven, not animated
+    let raf = 0;
+    const EASE = 0.18; // per-frame catch-up; smooth but responsive at 60fps
+    const angleBetween = (a: typeof dispVecRef.current, b: typeof dispVecRef.current) => {
+      if (!a || !b) return 0;
+      const d = Math.max(-1, Math.min(1, a.x * b.x + a.y * b.y + a.z * b.z));
+      return Math.acos(d) * (180 / Math.PI);
+    };
+    const valid = (v: typeof dispVecRef.current) =>
+      !!v && Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z);
+    const loop = () => {
+      const target = targetVecRef.current;
+      if (valid(target)) {
+        const disp = dispVecRef.current;
+        if (!disp) {
+          dispVecRef.current = { ...target! };
+        } else {
+          const a = angleBetween(disp, target);
+          if (a > 40) {
+            // Likely the iOS near-vertical flip. Hold, unless a far target
+            // persists (real reorientation) for ~12 frames, then snap.
+            const cand = candVecRef.current;
+            if (cand && angleBetween(cand, target) < 10) {
+              candCountRef.current++;
+            } else {
+              candVecRef.current = { ...target! };
+              candCountRef.current = 1;
+            }
+            if (candCountRef.current >= 12) {
+              dispVecRef.current = { ...target! };
+              candCountRef.current = 0;
+            }
+          } else {
+            candCountRef.current = 0;
+            const nx = disp.x + (target!.x - disp.x) * EASE;
+            const ny = disp.y + (target!.y - disp.y) * EASE;
+            const nz = disp.z + (target!.z - disp.z) * EASE;
+            const l = Math.sqrt(nx * nx + ny * ny + nz * nz);
+            if (Number.isFinite(l) && l > 0) {
+              dispVecRef.current = { x: nx / l, y: ny / l, z: nz / l };
+            }
+          }
+        }
+        const d = dispVecRef.current;
+        if (d) {
+          const horiz = Math.sqrt(d.x * d.x + d.y * d.y);
+          const alt = Math.atan2(d.z, horiz) * (180 / Math.PI);
+          let az = Math.atan2(-d.x, d.y) * (180 / Math.PI);
+          az = ((az % 360) + 360) % 360;
+          setLiveView((prev) =>
+            // Skip the state update when essentially unchanged to avoid needless
+            // re-renders when the phone is still.
+            prev && Math.abs(prev.alt - alt) < 0.03 && Math.abs(prev.az - az) < 0.03
+              ? prev
+              : { alt, az }
+          );
+        }
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => {
+      cancelAnimationFrame(raf);
+      // Reset the display so re-entering live re-primes cleanly.
+      dispVecRef.current = null;
+      candVecRef.current = null;
+      candCountRef.current = 0;
+    };
+  }, [skyMode]);
   // On entering manual, snapshot the current pointing so the view starts where
   // the user was already looking. On returning to live, clear it so the gyro
   // takes back over cleanly.
@@ -167,8 +259,9 @@ export default function HomePage() {
       };
     });
   }, []);
-  // The direction SkyView renders: gyro in live mode, user view in manual.
-  const skyViewDir = skyMode === "manual" ? manualView : pointing;
+  // The direction SkyView renders: smooth animated view in live mode (falls
+  // back to immediate pointing until the loop primes), user view in manual.
+  const skyViewDir = skyMode === "manual" ? manualView : liveView ?? pointing;
   // Match: closest object to phone direction, using the FILTERED sky so
   // turning off "stars" makes the app identify planets/satellites instead.
   // If user is tracking something explicit, resolve to its live alt/az from
