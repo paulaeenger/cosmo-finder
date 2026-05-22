@@ -17,8 +17,13 @@ import {
   deviceToVector,
   makeOrientationSmoother,
   angularDistance,
+  applyCalibration,
+  solveCalibration,
+  horizontalToVector,
+  IDENTITY_CALIBRATION,
+  type Calibration,
 } from "@/lib/astronomy/coords";
-import { useSensorRecorder } from "@/hooks/useSensorRecorder";
+import { CalibratePanel } from "@/components/CalibratePanel";
 import { StartScanner } from "@/components/StartScanner";
 import { SkyCompass } from "@/components/SkyCompass";
 import { SkyView } from "@/components/SkyView";
@@ -123,7 +128,10 @@ export default function HomePage() {
   // jittering frame to frame. Smooths the 3D pointing VECTOR (stable near the
   // zenith) and returns alt/az. Created once.
   const smootherRef = useRef(makeOrientationSmoother(0.12));
-  const recorder = useSensorRecorder();
+  // Device calibration: solved when the user aligns to a known object. Applied
+  // to every raw pointing vector so the whole sky lines up on their hardware.
+  const [calibration, setCalibration] = useState<Calibration>(IDENTITY_CALIBRATION);
+  const rawVecRef = useRef<{ x: number; y: number; z: number } | null>(null);
   const pointing = useMemo(() => {
     const vec = deviceToVector(
       orientation.alpha,
@@ -132,20 +140,13 @@ export default function HomePage() {
     );
     if (!vec) {
       smootherRef.current.reset();
+      rawVecRef.current = null;
       return null;
     }
-    return smootherRef.current.push(vec);
-  }, [orientation.alpha, orientation.beta, orientation.gamma]);
-  // Diagnostic capture: while recording, sample raw angles + computed view.
-  useEffect(() => {
-    recorder.capture(
-      orientation.alpha,
-      orientation.beta,
-      orientation.gamma,
-      pointing?.alt ?? null,
-      pointing?.az ?? null
-    );
-  }, [orientation.alpha, orientation.beta, orientation.gamma, pointing, recorder]);
+    rawVecRef.current = vec;
+    const corrected = applyCalibration(calibration, vec);
+    return smootherRef.current.push(corrected);
+  }, [orientation.alpha, orientation.beta, orientation.gamma, calibration]);
   // On entering manual, snapshot the current pointing so the view starts where
   // the user was already looking. On returning to live, clear it so the gyro
   // takes back over cleanly.
@@ -272,38 +273,19 @@ export default function HomePage() {
               onReset={reset}
               allOn={allOn}
             />
-            {/* TEMP DIAGNOSTIC: record raw sensor + view for analysis */}
-            <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/[0.04] p-3">
-              {!recorder.log ? (
-                <button
-                  onClick={() => recorder.start(8000)}
-                  disabled={recorder.recording}
-                  className="w-full rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 text-[12px] uppercase tracking-[0.2em] text-emerald-300 font-mono disabled:opacity-60"
-                >
-                  {recorder.recording
-                    ? "Recording… raise phone to the Moon now"
-                    : "● Record 8s sensor log (then reproduce the bug)"}
-                </button>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-[11px] text-emerald-300/80 font-mono">
-                    Done. Select all and copy this, paste it to Claude:
-                  </p>
-                  <textarea
-                    readOnly
-                    value={recorder.log}
-                    onFocus={(e) => e.currentTarget.select()}
-                    className="h-32 w-full resize-none rounded-lg border border-white/10 bg-black/40 p-2 text-[9px] font-mono text-white/70"
-                  />
-                  <button
-                    onClick={recorder.clear}
-                    className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-mono"
-                  >
-                    record again
-                  </button>
-                </div>
-              )}
-            </div>
+            {/* Calibration: point at a known object, tap it, align the sky. */}
+            <CalibratePanel
+              sky={filteredSky}
+              onCalibrate={(obj) => {
+                const raw = rawVecRef.current;
+                if (!raw) return;
+                const trueDir = horizontalToVector(obj.alt, obj.az);
+                setCalibration(solveCalibration(raw, trueDir));
+                smootherRef.current.reset();
+              }}
+              onReset={() => setCalibration(IDENTITY_CALIBRATION)}
+              calibrated={calibration !== IDENTITY_CALIBRATION}
+            />
             <ViewToggle mode={viewMode} onChange={setViewMode} />
             {viewMode === "panoramic" && (
               <SkyModeToggle mode={skyMode} onChange={setSkyMode} />

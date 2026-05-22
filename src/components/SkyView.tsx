@@ -400,34 +400,6 @@ export function SkyView({
     );
   }
   const arActive = arOn && camera.active;
-  // TEMP DEBUG v2: capture the view direction and the Moon's projection status
-  // at all times (not just AR), to catch the disappearing-when-high bug. Shows
-  // what the app's pointing direction is and where it places the Moon.
-  // TEMP DEBUG v4: catch sudden view-direction JUMPS. If `view` lurches as you
-  // tilt toward the Moon, that's what throws everything off-screen. We remember
-  // the largest single-frame jump seen.
-  const lastViewRef = useRef<{ alt: number; az: number } | null>(null);
-  const maxJumpRef = useRef(0);
-  const debugLine = useMemo(() => {
-    if (!view) return "view: null";
-    let jump = 0;
-    if (lastViewRef.current) {
-      const dAlt = Math.abs(view.alt - lastViewRef.current.alt);
-      let dAz = Math.abs(view.az - lastViewRef.current.az);
-      if (dAz > 180) dAz = 360 - dAz;
-      jump = Math.max(dAlt, dAz);
-      if (jump > maxJumpRef.current) maxJumpRef.current = jump;
-    }
-    lastViewRef.current = { alt: view.alt, az: view.az };
-    const moonObj = sky.find((o) => o.kind === "moon");
-    const moonPr = projected.find((p) => p.obj.kind === "moon");
-    const moonPart = !moonObj
-      ? "moon:absent"
-      : moonPr
-      ? `moon(${moonPr.x.toFixed(0)},${moonPr.y.toFixed(0)})`
-      : `moon CULLED a${moonObj.alt.toFixed(0)} z${moonObj.az.toFixed(0)}`;
-    return `v a${view.alt.toFixed(0)} z${view.az.toFixed(0)} jump${jump.toFixed(0)} max${maxJumpRef.current.toFixed(0)} p:${projected.length} | ${moonPart}`;
-  }, [view, sky, projected]);
   // What the crosshair is on: the projected object nearest screen center.
   // Used for the AR reticle readout ("pointing at X").
   const centerTarget = useMemo(() => {
@@ -897,11 +869,6 @@ export function SkyView({
           </div>
         </div>
       )}
-
-      {/* TEMP DEBUG v2 readout — remove after diagnosis */}
-      <div className="pointer-events-none absolute left-2 top-2 z-30 rounded bg-black/75 px-2 py-1 text-[9px] font-mono text-emerald-300">
-        {debugLine}
-      </div>
 
       {/* AR controls */}
       <div className="absolute bottom-3 right-3 flex items-center gap-2">

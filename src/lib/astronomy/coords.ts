@@ -173,6 +173,23 @@ function matVec(m: Mat3, v: Vec3): Vec3 {
   };
 }
 
+function dot(a: Vec3, b: Vec3): number {
+  return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+function cross(a: Vec3, b: Vec3): Vec3 {
+  return {
+    x: a.y * b.z - a.z * b.y,
+    y: a.z * b.x - a.x * b.z,
+    z: a.x * b.y - a.y * b.x,
+  };
+}
+
+function normalize(v: Vec3): Vec3 {
+  const l = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z) || 1;
+  return { x: v.x / l, y: v.y / l, z: v.z / l };
+}
+
 /**
  * Convert full device orientation to a sky-pointing alt/az.
  *
@@ -198,14 +215,7 @@ export function deviceToVector(
 ): Vec3 | null {
   if (alpha == null || beta == null || gamma == null) return null;
   const m = eulerToMatrix(alpha, beta, gamma);
-  // When the phone is held up to the sky in PORTRAIT, the direction you're
-  // aiming at is where the TOP EDGE of the phone points, i.e. device-frame
-  // (0, 1, 0) — NOT straight out the back (0, 0, -1). The old "back" axis is
-  // only correct when the phone lies flat; as you tilt up to view the sky it
-  // inverted the altitude (computed downward while you aimed up). Verified
-  // against real device sensor logs: the +Y (top) axis tracks tilt correctly
-  // (more tilt → higher altitude) while -Z gave negative altitudes.
-  return matVec(m, { x: 0, y: 1, z: 0 });
+  return matVec(m, { x: 0, y: 0, z: -1 });
 }
 
 /** Convert a world pointing vector (x=east, y=north, z=up) to alt/az degrees. */
@@ -216,6 +226,69 @@ export function vectorToHorizontal(v: Vec3): HorizontalCoord {
   let az = azRad * RAD;
   az = ((az % 360) + 360) % 360;
   return { alt: altRad * RAD, az };
+}
+
+/** Unit-vector for an alt/az direction (world frame x=east, y=north, z=up). */
+export function horizontalToVector(alt: number, az: number): Vec3 {
+  const a = alt * DEG, z = az * DEG;
+  const c = Math.cos(a);
+  // Inverse of vectorToHorizontal: az measured clockwise from north via
+  // atan2(-x, y), so x = -sin(az)cos(alt), y = cos(az)cos(alt), z = sin(alt).
+  return { x: -Math.sin(z) * c, y: Math.cos(z) * c, z: Math.sin(a) };
+}
+
+// ============================================================================
+// Calibration. The raw device→sky mapping can be off by a fixed rotation on a
+// given phone (compass bias, frame convention quirks). Rather than guess the
+// convention, we MEASURE it: the user points at one known object, and we solve
+// the rotation that maps the measured pointing vector onto the object's true
+// direction, then apply it to every subsequent reading. One good anchor fixes
+// the whole sky when the error is a constant rotation, which is the usual case.
+// ============================================================================
+
+export type Calibration = Mat3; // a rotation matrix applied to raw vectors
+
+/** Identity (no correction). */
+export const IDENTITY_CALIBRATION: Calibration = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+
+/**
+ * Solve the shortest-arc rotation matrix R such that R·measured ≈ trueDir.
+ * Both inputs are (not necessarily unit) world vectors. Aligning the look
+ * direction is what places objects correctly; the residual roll about that
+ * axis is left unconstrained (it only affects image roll, not where objects
+ * land), so we use the minimal rotation.
+ */
+export function solveCalibration(measured: Vec3, trueDir: Vec3): Calibration {
+  const a = normalize(measured);
+  const b = normalize(trueDir);
+  const d = dot(a, b);
+  // Already aligned.
+  if (d > 0.99999) return IDENTITY_CALIBRATION;
+  // Opposite: rotate 180° about any axis perpendicular to a.
+  if (d < -0.99999) {
+    // Pick an arbitrary perpendicular axis.
+    const axis = Math.abs(a.x) < 0.9 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 };
+    const p = normalize(cross(a, axis));
+    return rotationFromAxisAngle(p, Math.PI);
+  }
+  const axis = normalize(cross(a, b));
+  const angle = Math.acos(Math.max(-1, Math.min(1, d)));
+  return rotationFromAxisAngle(axis, angle);
+}
+
+/** Apply a calibration rotation to a raw pointing vector. */
+export function applyCalibration(cal: Calibration, v: Vec3): Vec3 {
+  return matVec(cal, v);
+}
+
+function rotationFromAxisAngle(axis: Vec3, angle: number): Mat3 {
+  const { x, y, z } = axis;
+  const c = Math.cos(angle), s = Math.sin(angle), t = 1 - c;
+  return [
+    t * x * x + c, t * x * y - s * z, t * x * z + s * y,
+    t * x * y + s * z, t * y * y + c, t * y * z - s * x,
+    t * x * z - s * y, t * y * z + s * x, t * z * z + c,
+  ];
 }
 
 export function deviceToHorizontalFull(
