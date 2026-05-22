@@ -284,46 +284,63 @@ export type OrientationSmoother = {
 export function makeOrientationSmoother(factor = 0.12): OrientationSmoother {
   let sx = 0, sy = 0, sz = 0;
   let primed = false;
-  let rejectCount = 0;
+  // Candidate tracking: a large jump is only accepted once a NEW orientation is
+  // confirmed by several consecutive, mutually-consistent readings.
+  let candX = 0, candY = 0, candZ = 0, candCount = 0;
+  const JUMP_LIMIT_DEG = 35;
 
   return {
     push(v: Vec3): HorizontalCoord {
-      // Normalize the incoming vector.
       const l = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z) || 1;
       const nx = v.x / l, ny = v.y / l, nz = v.z / l;
       if (!primed) {
         sx = nx; sy = ny; sz = nz;
         primed = true;
-      } else {
-        // Angular error between smoothed and new direction (dot → angle).
-        const dotp = Math.max(-1, Math.min(1, sx * nx + sy * ny + sz * nz));
-        const errDeg = Math.acos(dotp) * RAD;
-        // GLITCH REJECTION: a real hand can't swing the aim more than ~35° in
-        // one frame (~16ms). Larger jumps are sensor artifacts — most often the
-        // iOS alpha/gamma flip near vertical, which swings azimuth ~180° and
-        // throws every object off-screen. When we see an impossible jump, we
-        // hold the current direction instead of following the glitch. A brief
-        // counter lets a SUSTAINED real change (e.g. you genuinely spun around)
-        // through after a few frames so we never get permanently stuck.
-        if (errDeg > 35 && rejectCount < 8) {
-          rejectCount++;
+        candX = nx; candY = ny; candZ = nz; candCount = 0;
+        return vectorToHorizontal({ x: sx, y: sy, z: sz });
+      }
+
+      const dotp = Math.max(-1, Math.min(1, sx * nx + sy * ny + sz * nz));
+      const errDeg = Math.acos(dotp) * RAD;
+
+      if (errDeg > JUMP_LIMIT_DEG) {
+        // Impossible single-frame jump → almost certainly the iOS steep-tilt
+        // azimuth flip. We do NOT follow it. But to avoid freezing forever if
+        // the device has genuinely settled at a new orientation, we require the
+        // new position to be CONFIRMED by ~12 consecutive, mutually-consistent
+        // readings before re-priming. A flip that merely oscillates back and
+        // forth never builds that agreement, so it stays rejected; a real abrupt
+        // reorientation does, and we snap to it (~0.2s later).
+        const cdot = Math.max(-1, Math.min(1, candX * nx + candY * ny + candZ * nz));
+        const candErr = Math.acos(cdot) * RAD;
+        if (candErr < 10) {
+          candCount++;
+        } else {
+          candX = nx; candY = ny; candZ = nz; candCount = 1;
+        }
+        if (candCount >= 12) {
+          sx = nx; sy = ny; sz = nz;
+          candCount = 0;
           return vectorToHorizontal({ x: sx, y: sy, z: sz });
         }
-        rejectCount = 0;
-        // Gentle when nearly still, fast catch-up on real movement.
-        const adaptive = Math.min(0.6, factor + (errDeg / 25) * (0.6 - factor));
-        sx += (nx - sx) * adaptive;
-        sy += (ny - sy) * adaptive;
-        sz += (nz - sz) * adaptive;
-        const sl = Math.sqrt(sx * sx + sy * sy + sz * sz) || 1;
-        sx /= sl; sy /= sl; sz /= sl;
+        return vectorToHorizontal({ x: sx, y: sy, z: sz });
       }
+
+      // Normal in-range update. Keep the candidate tracking the live reading so
+      // a later flip is measured against where we actually are.
+      candX = nx; candY = ny; candZ = nz; candCount = 0;
+      const adaptive = Math.min(0.6, factor + (errDeg / 25) * (0.6 - factor));
+      sx += (nx - sx) * adaptive;
+      sy += (ny - sy) * adaptive;
+      sz += (nz - sz) * adaptive;
+      const sl = Math.sqrt(sx * sx + sy * sy + sz * sz) || 1;
+      sx /= sl; sy /= sl; sz /= sl;
       return vectorToHorizontal({ x: sx, y: sy, z: sz });
     },
     reset() {
       sx = 0; sy = 0; sz = 0;
       primed = false;
-      rejectCount = 0;
+      candX = 0; candY = 0; candZ = 0; candCount = 0;
     },
   };
 }
