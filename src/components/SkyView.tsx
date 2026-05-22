@@ -400,6 +400,18 @@ export function SkyView({
     );
   }
   const arActive = arOn && camera.active;
+  // TEMP DEBUG: live state of the Moon, to diagnose the "disappears at center"
+  // report. Shows whether the Moon is in the projected set and its coords.
+  const moonDebug = useMemo(() => {
+    if (!arActive) return null;
+    const moonObj = sky.find((o) => o.kind === "moon");
+    const moonProj = projected.find((p) => p.obj.kind === "moon");
+    if (!moonObj) return "moon: NOT IN SKY DATA";
+    const onScreen = moonProj
+      ? `x=${moonProj.x.toFixed(0)} y=${moonProj.y.toFixed(0)}`
+      : "CULLED (off-screen/behind)";
+    return `moon alt=${moonObj.alt.toFixed(1)} az=${moonObj.az.toFixed(1)} | ${onScreen}`;
+  }, [arActive, sky, projected]);
   // What the crosshair is on: the projected object nearest screen center.
   // Used for the AR reticle readout ("pointing at X").
   const centerTarget = useMemo(() => {
@@ -867,6 +879,13 @@ export function SkyView({
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* TEMP DEBUG readout */}
+      {arActive && moonDebug && (
+        <div className="pointer-events-none absolute left-3 top-12 rounded bg-black/70 px-2 py-1 text-[10px] font-mono text-emerald-300">
+          {moonDebug}
         </div>
       )}
 
