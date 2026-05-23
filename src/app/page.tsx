@@ -24,6 +24,10 @@ import {
   IDENTITY_CALIBRATION,
   type Calibration,
 } from "@/lib/astronomy/coords";
+import {
+  createHeadingStabilizer,
+  type HeadingStabilizer,
+} from "@/lib/orientation/headingStabilizer";
 import { CalibratePanel } from "@/components/CalibratePanel";
 import { StartScanner } from "@/components/StartScanner";
 import { SkyCompass } from "@/components/SkyCompass";
@@ -136,6 +140,36 @@ export default function HomePage() {
   // manual snapshot). The smoother here is light; the RENDER LOOP below does the
   // visual smoothing at a steady 60fps.
   const targetVecRef = useRef<{ x: number; y: number; z: number } | null>(null);
+  // Heading (azimuth) stabilizer: rejects the near-vertical "azimuth slides
+  // while still" drift by gating azimuth correction on gyro ENERGY (sign-free
+  // |rotationRate|). Toggleable so it can be compared on-device against the
+  // current path; it only touches azimuth, never altitude or roll.
+  const [stabilizeHeading, setStabilizeHeading] = useState(true);
+  const stabilizeOnRef = useRef(stabilizeHeading);
+  const headingStabRef = useRef<HeadingStabilizer | null>(null);
+  if (!headingStabRef.current) headingStabRef.current = createHeadingStabilizer();
+  // Latest gyro energy (deg/s, |rotationRate|). High default so we "fail open"
+  // to follow-mode before the first devicemotion sample arrives.
+  const gyroEnergyRef = useRef(999);
+  // Keep the loop's view of the toggle current without restarting the rAF loop;
+  // reset the filter on a flip so it re-primes from the live measurement.
+  useEffect(() => {
+    stabilizeOnRef.current = stabilizeHeading;
+    headingStabRef.current?.reset();
+  }, [stabilizeHeading]);
+  // Feed gyro energy from devicemotion. Magnitude only — no axis/sign mapping,
+  // which is what made earlier gyro fusion fragile. Active only in live mode.
+  useEffect(() => {
+    if (!granted || skyMode !== "live") return;
+    const onMotion = (e: DeviceMotionEvent) => {
+      const r = e.rotationRate;
+      if (!r) return;
+      const a = r.alpha ?? 0, b = r.beta ?? 0, g = r.gamma ?? 0;
+      gyroEnergyRef.current = Math.sqrt(a * a + b * b + g * g);
+    };
+    window.addEventListener("devicemotion", onMotion);
+    return () => window.removeEventListener("devicemotion", onMotion);
+  }, [granted, skyMode]);
   const pointing = useMemo(() => {
     const vec = deviceToVector(orientation.alpha, orientation.beta, orientation.gamma);
     if (!vec) {
@@ -215,6 +249,15 @@ export default function HomePage() {
           const alt = Math.atan2(d.z, horiz) * (180 / Math.PI);
           let az = Math.atan2(-d.x, d.y) * (180 / Math.PI);
           az = ((az % 360) + 360) % 360;
+          // Azimuth-only heading stabilization. The eased vector above already
+          // smooths jitter but cannot reject slow magnetometer drift (a slow
+          // drift and a slow pan look identical to a smoother). The stabilizer
+          // distinguishes them via gyro ENERGY: near-zero energy => still =>
+          // freeze azimuth (reject drift); real pan carries energy => follow.
+          // Altitude is left exactly as computed.
+          if (stabilizeOnRef.current && headingStabRef.current) {
+            az = headingStabRef.current.push(az, gyroEnergyRef.current);
+          }
           setLiveView((prev) =>
             // Skip the state update when essentially unchanged to avoid needless
             // re-renders when the phone is still.
@@ -233,6 +276,7 @@ export default function HomePage() {
       dispVecRef.current = null;
       candVecRef.current = null;
       candCountRef.current = 0;
+      headingStabRef.current?.reset();
     };
   }, [skyMode]);
   // On entering manual, snapshot the current pointing so the view starts where
@@ -364,6 +408,17 @@ export default function HomePage() {
               <Activity className="h-3 w-3" />
               Sensor diagnostics
             </a>
+            <button
+              onClick={() => setStabilizeHeading((v) => !v)}
+              className={`flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2 text-[10px] uppercase tracking-[0.25em] font-mono transition ${
+                stabilizeHeading
+                  ? "border-emerald-400/25 bg-emerald-400/[0.05] text-emerald-300/80 hover:text-emerald-200"
+                  : "border-white/10 bg-white/[0.02] text-white/45 hover:text-white/70"
+              }`}
+            >
+              <Compass className="h-3 w-3" />
+              Heading stabilizer: {stabilizeHeading ? "on" : "off"}
+            </button>
             <OfflineIndicator />
             {skyConditions && (
               <SkyConditionsBanner
