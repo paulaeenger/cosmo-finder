@@ -22,13 +22,16 @@ export function CalibratePanel({ sky, onCalibrate, onReset, calibrated }: Props)
   const [open, setOpen] = useState(false);
   const [justDid, setJustDid] = useState<string | null>(null);
 
-  // Bright, currently-visible anchors: Moon, planets, and bright named stars.
+  // Bright, currently-visible anchors: Sun (daytime), Moon, planets, and
+  // bright named stars. The Sun is the only naked-eye reference in daylight,
+  // so it must be selectable or calibration is impossible during the day.
   const anchors = sky
     .filter(
       (o) =>
         !o.belowHorizon &&
         o.alt > 5 &&
-        (o.kind === "moon" ||
+        (o.kind === "sun" ||
+          o.kind === "moon" ||
           o.kind === "planet" ||
           (o.kind === "star" && o.mag <= 1.6 && !/^(HIP|HD|HR|TYC)\b/i.test(o.name)))
     )
