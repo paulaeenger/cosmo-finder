@@ -320,12 +320,10 @@ export default function HomePage() {
     const c = applyCalibration(calibration, u);
     if (!Number.isFinite(c.x) || !Number.isFinite(c.y) || !Number.isFinite(c.z)) return null;
     // Convert coords world frame (x=east, y=north, z=up) -> projection frame
-    // (x=east, y=up, z=north). No negation: the projection now builds a
-    // correctly right-handed screen basis, so the device's own up axis maps
-    // directly. (Previously this was negated to mask a left-handed basis,
-    // which fixed horizontal but left vertical pan inverted.) Roll still
-    // follows the phone; manual mode uses worldRefUp and is unaffected here.
-    return { x: c.x, y: c.z, z: c.y };
+    // (x=east, y=up, z=north), AND negate. This negated form is what made live
+    // movement track correctly on-device; keep it. (An attempt to "fix the
+    // basis handedness" instead regressed the feel, so we reverted to this.)
+    return { x: -c.x, y: -c.z, z: -c.y };
   }, [orientation.alpha, orientation.beta, orientation.gamma, calibration, skyMode]);
   // Match: closest object to phone direction, using the FILTERED sky so
   // turning off "stars" makes the app identify planets/satellites instead.

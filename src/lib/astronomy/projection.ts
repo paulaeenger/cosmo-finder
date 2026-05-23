@@ -65,17 +65,8 @@ export function project(
     const north: Vec3 = { x: 0, y: 0, z: 1 };
     reference = Math.abs(dot(forward, north)) > 0.9995 ? { x: 0, y: 1, z: 0 } : north;
   }
-  // Right-handed screen basis. NOTE: order matters. With x=east, y=up,
-  // z=north and the screen's y flipped on output (cy - projY), the basis must
-  // be built as right = reference x forward and up = forward x right so that
-  // an object to the EAST of the look direction lands on screen-RIGHT and an
-  // object ABOVE lands screen-UP. (The earlier cross(forward, reference) /
-  // cross(right, forward) order was left-handed, which inverted pan; a prior
-  // patch negated the up-vector to mask the horizontal half, leaving the
-  // vertical inverted. This fixes both at the source — the up-vector is now
-  // passed un-negated.)
-  const right = normalize(cross(reference, forward));
-  const up = cross(forward, right);
+  const right = normalize(cross(forward, reference));
+  const up = cross(right, forward);
 
   // Project objVec into camera space
   const camX = dot(objVec, right);
