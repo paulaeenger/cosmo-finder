@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import { MapPin, Compass, Clock } from "lucide-react";
+import { MapPin, Compass, Clock, Activity } from "lucide-react";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useDeviceOrientation } from "@/hooks/useDeviceOrientation";
 import { useSkyObjects } from "@/hooks/useSkyObjects";
@@ -355,6 +355,15 @@ export default function HomePage() {
                 ? "Compass may be off · calibrate"
                 : "Calibrate compass"}
             </button>
+            {/* Sensor diagnostic instrument. Full navigation (not client-side)
+                so a stale service worker can't trap you on the cached shell. */}
+            <a
+              href="/diag"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-400/20 bg-amber-400/[0.04] px-4 py-2 text-[10px] uppercase tracking-[0.25em] text-amber-300/70 font-mono transition hover:text-amber-200"
+            >
+              <Activity className="h-3 w-3" />
+              Sensor diagnostics
+            </a>
             <OfflineIndicator />
             {skyConditions && (
               <SkyConditionsBanner
