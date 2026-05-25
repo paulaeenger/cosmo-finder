@@ -128,3 +128,88 @@ export function quatAngleDeg(a: Quat, b: Quat): number {
   dot = Math.min(1, dot);
   return 2 * Math.acos(dot) * RAD;
 }
+
+// ============================================================================
+// Scalar yaw-offset complementary fusion (the path actually wired into the app).
+//
+// WHY THIS, NOT THE QUATERNION GYRO INTEGRATION ABOVE
+// iOS already hands us a gyro-fused device attitude in alpha/beta/gamma (smooth,
+// 60Hz, no integration needed). Its ONLY defect is that `alpha`'s zero is an
+// arbitrary yaw set when listening began, so it is not north-referenced and it
+// slowly drifts. webkitCompassHeading IS north-referenced but is coarse
+// (~1deg quantized), low-rate, and frequently FREEZES for seconds.
+//
+// So instead of re-deriving attitude from rotationRate (which needs a fragile
+// gyro axis/sign mapping that bit earlier attempts), we keep beta/gamma raw and
+// correct ONLY the yaw: maintain a slowly-varying `offset` that nudges
+// (alpha + offset) toward the compass heading. Because the offset moves slowly:
+//   - a real pan rides `alpha` instantly (no lag, glassy)        -> smooth
+//   - slow alpha drift is cancelled by the offset                -> no drift
+//   - compass quantization/noise is averaged out by the slow gain -> no staircase
+//   - a frozen compass just means "no new correction this frame"  -> pan unaffected
+// This is the complementary filter, reduced to the one degree of freedom that
+// is actually broken on iOS.
+// ============================================================================
+
+/** Smallest signed difference a-b on a circle, in degrees, range (-180, 180]. */
+export function angleDiffDeg(a: number, b: number): number {
+  let d = (((a - b) % 360) + 540) % 360 - 180;
+  if (d <= -180) d += 360;
+  return d;
+}
+
+/** Wrap an angle into [0, 360). */
+export function wrap360(a: number): number {
+  return ((a % 360) + 360) % 360;
+}
+
+export interface YawOffsetTracker {
+  /**
+   * Feed the raw (smooth, gyro-fused) device yaw and the north-referenced yaw
+   * derived from the compass (same CCW sense as `e.alpha`, i.e. 360 - heading).
+   * Pass `null` for `alphaTrueDeg` when no compass reading is available this
+   * frame; the offset is then held (the platform's alpha is used as-is). Returns
+   * the current yaw offset in degrees.
+   */
+  push(rawAlphaDeg: number, alphaTrueDeg: number | null): number;
+  /** Forget state so the next push re-primes (e.g. when leaving live mode). */
+  reset(): void;
+  /** Current offset, for diagnostics. */
+  offset(): number;
+}
+
+/**
+ * @param gain per-sample correction toward the compass. At ~60Hz, 0.02 gives a
+ * ~0.8s drift-correction time constant: slow enough to ignore compass jitter and
+ * never lag a pan, fast enough to hold true north. Lower = steadier but slower to
+ * recover from drift; higher = chases the (noisy) compass harder.
+ */
+export function makeYawOffsetTracker(gain = 0.02): YawOffsetTracker {
+  let off = 0;
+  let primed = false;
+  return {
+    push(rawAlphaDeg: number, alphaTrueDeg: number | null): number {
+      if (!Number.isFinite(rawAlphaDeg)) return off;
+      if (alphaTrueDeg == null || !Number.isFinite(alphaTrueDeg)) {
+        // No compass reference this frame: hold the last offset.
+        return off;
+      }
+      const target = wrap360(alphaTrueDeg - rawAlphaDeg);
+      if (!primed) {
+        // Lock onto the first compass reading instantly; track slowly after.
+        off = target;
+        primed = true;
+        return off;
+      }
+      off = wrap360(off + gain * angleDiffDeg(target, off));
+      return off;
+    },
+    reset() {
+      off = 0;
+      primed = false;
+    },
+    offset() {
+      return off;
+    },
+  };
+}

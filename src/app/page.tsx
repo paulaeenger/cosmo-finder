@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { MapPin, Compass, Clock, Activity } from "lucide-react";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useDeviceOrientation } from "@/hooks/useDeviceOrientation";
+import { useFusedOrientation } from "@/hooks/useFusedOrientation";
 import { useSkyObjects } from "@/hooks/useSkyObjects";
 import { useSatellites } from "@/hooks/useSatellites";
 import { useSkyFilters, categoryFor, type FilterCategory } from "@/hooks/useSkyFilters";
@@ -145,6 +146,10 @@ export default function HomePage() {
   // |rotationRate|). Toggleable so it can be compared on-device against the
   // current path; it only touches azimuth, never altitude or roll.
   const [stabilizeHeading, setStabilizeHeading] = useState(true);
+  // Gyro+compass heading fusion: replaces the staircasing compass-driven yaw
+  // with the smooth gyro-fused attitude (e.alpha) plus a slow compass-locked
+  // offset. On by default; toggleable for on-device A/B against the old path.
+  const [useFusion, setUseFusion] = useState(true);
   const stabilizeOnRef = useRef(stabilizeHeading);
   const headingStabRef = useRef<HeadingStabilizer | null>(null);
   if (!headingStabRef.current) headingStabRef.current = createHeadingStabilizer();
@@ -170,8 +175,18 @@ export default function HomePage() {
     window.addEventListener("devicemotion", onMotion);
     return () => window.removeEventListener("devicemotion", onMotion);
   }, [granted, skyMode]);
+  // Heading fusion source. Active only in live mode while enabled. When ready we
+  // feed its smooth, north-locked yaw (plus raw beta/gamma) into the SAME
+  // downstream pipeline (calibration -> vector smoother -> render-loop ease ->
+  // optional heading stabilizer), so this swaps only the SOURCE of the angles,
+  // nothing else. Falls back to the device orientation (old path) until primed.
+  const fused = useFusedOrientation(granted && skyMode === "live" && useFusion);
+  const fuseActive = useFusion && fused.ready;
+  const srcAlpha = fuseActive ? fused.alpha : orientation.alpha;
+  const srcBeta = fuseActive ? fused.beta : orientation.beta;
+  const srcGamma = fuseActive ? fused.gamma : orientation.gamma;
   const pointing = useMemo(() => {
-    const vec = deviceToVector(orientation.alpha, orientation.beta, orientation.gamma);
+    const vec = deviceToVector(srcAlpha, srcBeta, srcGamma);
     if (!vec) {
       smootherRef.current.reset();
       rawVecRef.current = null;
@@ -189,7 +204,7 @@ export default function HomePage() {
       targetVecRef.current = corrected;
     }
     return smootherRef.current.push(corrected);
-  }, [orientation.alpha, orientation.beta, orientation.gamma, calibration]);
+  }, [srcAlpha, srcBeta, srcGamma, calibration]);
 
   // RENDER-LOOP INTERPOLATION. Rendering runs on its own steady 60fps loop that
   // eases a display vector toward the latest sensor target. This decouples the
@@ -315,7 +330,7 @@ export default function HomePage() {
   // Null in manual mode — SkyView synthesizes an upright reference there.
   const viewUp = useMemo(() => {
     if (skyMode !== "live") return null;
-    const u = deviceUpVector(orientation.alpha, orientation.beta, orientation.gamma);
+    const u = deviceUpVector(srcAlpha, srcBeta, srcGamma);
     if (!u) return null;
     const c = applyCalibration(calibration, u);
     if (!Number.isFinite(c.x) || !Number.isFinite(c.y) || !Number.isFinite(c.z)) return null;
@@ -324,7 +339,7 @@ export default function HomePage() {
     // movement track correctly on-device; keep it. (An attempt to "fix the
     // basis handedness" instead regressed the feel, so we reverted to this.)
     return { x: -c.x, y: -c.z, z: -c.y };
-  }, [orientation.alpha, orientation.beta, orientation.gamma, calibration, skyMode]);
+  }, [srcAlpha, srcBeta, srcGamma, calibration, skyMode]);
   // Match: closest object to phone direction, using the FILTERED sky so
   // turning off "stars" makes the app identify planets/satellites instead.
   // If user is tracking something explicit, resolve to its live alt/az from
@@ -413,6 +428,17 @@ export default function HomePage() {
             >
               <Compass className="h-3 w-3" />
               Heading stabilizer: {stabilizeHeading ? "on" : "off"}
+            </button>
+            <button
+              onClick={() => setUseFusion((v) => !v)}
+              className={`flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2 text-[10px] uppercase tracking-[0.25em] font-mono transition ${
+                useFusion
+                  ? "border-emerald-400/25 bg-emerald-400/[0.05] text-emerald-300/80 hover:text-emerald-200"
+                  : "border-white/10 bg-white/[0.02] text-white/45 hover:text-white/70"
+              }`}
+            >
+              <Compass className="h-3 w-3" />
+              Gyro fusion: {useFusion ? "on" : "off"}
             </button>
             <OfflineIndicator />
             {skyConditions && (

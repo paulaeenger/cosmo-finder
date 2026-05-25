@@ -2,113 +2,120 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  type Quat,
-  type V3,
-  QUAT_IDENTITY,
-  quatFromEuler,
-  quatIntegrateGyro,
-  quatSlerp,
-  quatPointing,
-  quatAngleDeg,
+  makeYawOffsetTracker,
+  wrap360,
+  type YawOffsetTracker,
 } from "@/lib/astronomy/fusion";
 
-type FusionState = {
-  pointing: V3 | null; // back-of-phone direction, world frame
+export type FusedOrientation = {
+  /** North-referenced, drift-corrected yaw in the same CCW sense as e.alpha. */
+  alpha: number | null;
+  beta: number | null;
+  gamma: number | null;
   ready: boolean;
+  /** iOS magnetometer accuracy (deg), passed through for the calibration coach. */
   compassAccuracy: number | null;
 };
 
 /**
- * Fuses the gyroscope (DeviceMotion.rotationRate) with the compass-derived
- * orientation (DeviceOrientation) using a complementary filter on quaternions,
- * the same principle native sky apps use for glassy tracking.
+ * Heading fusion via a scalar yaw-offset complementary filter.
  *
- * - Gyro integrates every animation frame → smooth, fast, no gimbal flip.
- * - Compass gently corrects long-term drift via slerp.
- * The result is a stable, high-rate pointing direction.
+ * iOS already gives a gyro-fused attitude in alpha/beta/gamma — smooth and
+ * high-rate — but `alpha`'s zero is arbitrary (not true north) and drifts, while
+ * webkitCompassHeading is north-referenced yet coarse and prone to freezing. We
+ * keep beta/gamma raw and feed (alpha + offset) where `offset` is slowly nudged
+ * toward the compass. Result: pans ride the smooth attitude instantly (no
+ * staircase, no lag) while the heading stays locked to true north over time.
+ *
+ * Pass-through on platforms whose alpha is already absolute (Android's
+ * deviceorientationabsolute): no compass heading is present, so the offset stays
+ * at zero and the absolute alpha is used directly.
+ *
+ * @param active gate the listeners (e.g. only in live mode with fusion enabled).
  */
 export function useFusedOrientation(active: boolean) {
-  const [state, setState] = useState<FusionState>({
-    pointing: null,
+  const [state, setState] = useState<FusedOrientation>({
+    alpha: null,
+    beta: null,
+    gamma: null,
     ready: false,
     compassAccuracy: null,
   });
 
-  // Fused orientation quaternion (device → world).
-  const qRef = useRef<Quat>(QUAT_IDENTITY);
-  const primedRef = useRef(false);
-  // Latest compass quaternion + accuracy from DeviceOrientation.
-  const compassQRef = useRef<Quat | null>(null);
-  const accuracyRef = useRef<number | null>(null);
-  // Latest gyro rates (deg/s), device frame.
-  const gyroRef = useRef<{ x: number; y: number; z: number }>({ x: 0, y: 0, z: 0 });
-  const lastTsRef = useRef<number | null>(null);
-  const rafRef = useRef<number | null>(null);
-
-  // Drift-correction strength (slerp toward compass per frame). Low because the
-  // gyro carries the responsiveness; the compass only nudges out slow drift.
-  const SLERP = 0.05;
+  const trackerRef = useRef<YawOffsetTracker | null>(null);
+  if (!trackerRef.current) trackerRef.current = makeYawOffsetTracker();
+  // Once we've locked onto an absolute/true-north source, drop later
+  // relative-only events (Android fires both; their differing yaws would fight).
+  const haveAbsoluteRef = useRef(false);
 
   const onOrientation = useCallback((e: DeviceOrientationEvent) => {
-    const ev = e as unknown as { webkitCompassHeading?: number; webkitCompassAccuracy?: number };
-    const hasCompass = typeof ev.webkitCompassHeading === "number";
-    const alpha = hasCompass ? 360 - (ev.webkitCompassHeading as number) : e.alpha;
-    if (alpha == null || e.beta == null || e.gamma == null) return;
-    compassQRef.current = quatFromEuler(alpha, e.beta, e.gamma);
-    accuracyRef.current =
-      typeof ev.webkitCompassAccuracy === "number" ? ev.webkitCompassAccuracy : null;
-    // Prime the fused quaternion to the first compass reading.
-    if (!primedRef.current && compassQRef.current) {
-      qRef.current = compassQRef.current;
-      primedRef.current = true;
-    }
-  }, []);
+    const ev = e as unknown as {
+      webkitCompassHeading?: number;
+      webkitCompassAccuracy?: number;
+    };
+    const rawAlpha = e.alpha;
+    if (rawAlpha == null || e.beta == null || e.gamma == null) return;
 
-  const onMotion = useCallback((e: DeviceMotionEvent) => {
-    const r = e.rotationRate;
-    if (!r) return;
-    // iOS rotationRate is in deg/s. Axes: alpha=z, beta=x, gamma=y.
-    gyroRef.current = { x: r.beta ?? 0, y: r.gamma ?? 0, z: r.alpha ?? 0 };
+    const hasCompass = typeof ev.webkitCompassHeading === "number";
+    const isAbsolute = e.absolute === true || hasCompass;
+    // After an absolute reading, ignore relative-only events (drifting yaw).
+    if (haveAbsoluteRef.current && !isAbsolute) return;
+    if (isAbsolute) haveAbsoluteRef.current = true;
+
+    // North-referenced yaw in the SAME CCW sense as e.alpha. iOS exposes true
+    // north via webkitCompassHeading (clockwise), so 360 - heading converts it.
+    // null => no magnetometer this frame; tracker holds and we use alpha as-is
+    // (correct for Android's already-absolute alpha).
+    const alphaTrue = hasCompass
+      ? wrap360(360 - (ev.webkitCompassHeading as number))
+      : null;
+
+    const tracker = trackerRef.current!;
+    let fusedAlpha: number;
+    if (alphaTrue == null) {
+      fusedAlpha = wrap360(rawAlpha);
+    } else {
+      const offset = tracker.push(rawAlpha, alphaTrue);
+      fusedAlpha = wrap360(rawAlpha + offset);
+    }
+
+    setState({
+      alpha: fusedAlpha,
+      beta: e.beta,
+      gamma: e.gamma,
+      ready: true,
+      compassAccuracy:
+        typeof ev.webkitCompassAccuracy === "number"
+          ? ev.webkitCompassAccuracy
+          : null,
+    });
   }, []);
 
   useEffect(() => {
-    if (!active) return;
+    if (!active) {
+      // Re-prime cleanly next time fusion is enabled.
+      trackerRef.current?.reset();
+      haveAbsoluteRef.current = false;
+      setState((s) => (s.ready ? { ...s, ready: false } : s));
+      return;
+    }
     window.addEventListener("deviceorientation", onOrientation, true);
-    window.addEventListener("deviceorientationabsolute", onOrientation as EventListener, true);
-    window.addEventListener("devicemotion", onMotion, true);
-
-    const loop = (ts: number) => {
-      const last = lastTsRef.current;
-      lastTsRef.current = ts;
-      if (last != null && primedRef.current) {
-        const dt = Math.min(0.05, (ts - last) / 1000); // clamp dt on stalls
-        const g = gyroRef.current;
-        // 1) Gyro prediction (smooth, fast).
-        qRef.current = quatIntegrateGyro(qRef.current, g.x, g.y, g.z, dt);
-        // 2) Compass correction (kills drift). Skip if the compass is wildly
-        //    far — that's the near-vertical flip; let gyro carry through it.
-        const cq = compassQRef.current;
-        if (cq) {
-          const diff = quatAngleDeg(qRef.current, cq);
-          if (diff < 40) {
-            qRef.current = quatSlerp(qRef.current, cq, SLERP);
-          }
-        }
-        const p = quatPointing(qRef.current);
-        setState({ pointing: p, ready: true, compassAccuracy: accuracyRef.current });
-      }
-      rafRef.current = requestAnimationFrame(loop);
-    };
-    rafRef.current = requestAnimationFrame(loop);
-
+    window.addEventListener(
+      "deviceorientationabsolute",
+      onOrientation as EventListener,
+      true
+    );
     return () => {
       window.removeEventListener("deviceorientation", onOrientation, true);
-      window.removeEventListener("deviceorientationabsolute", onOrientation as EventListener, true);
-      window.removeEventListener("devicemotion", onMotion, true);
-      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
-      lastTsRef.current = null;
+      window.removeEventListener(
+        "deviceorientationabsolute",
+        onOrientation as EventListener,
+        true
+      );
+      trackerRef.current?.reset();
+      haveAbsoluteRef.current = false;
     };
-  }, [active, onOrientation, onMotion]);
+  }, [active, onOrientation]);
 
   return state;
 }
