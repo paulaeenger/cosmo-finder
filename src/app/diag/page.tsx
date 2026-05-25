@@ -22,6 +22,7 @@ import {
   deviceUpVector,
   vectorToHorizontal,
 } from "@/lib/astronomy/coords";
+import { makeYawOffsetTracker, wrap360 } from "@/lib/astronomy/fusion";
 
 type Row = {
   t: number;
@@ -42,6 +43,10 @@ type Row = {
   screenAngle: number;
   viewAlt: number | null;
   viewAz: number | null;
+  // Heading comparison: viewAz above is from RAW e.alpha (smooth but drifts off
+  // north). These two reproduce the two real pipelines for side-by-side proof:
+  viewAzCompass: number | null; // OLD production source: 360 - webkitCompassHeading (staircases/freezes)
+  viewAzFused: number | null;   // NEW fused source: e.alpha + slow compass-locked offset
   upX: number | null;
   upY: number | null;
   upZ: number | null;
@@ -90,6 +95,8 @@ export default function DiagPage() {
     accuracy: null as number | null,
     viewAlt: null as number | null,
     viewAz: null as number | null,
+    viewAzCompass: null as number | null,
+    viewAzFused: null as number | null,
     screenAngle: 0,
   });
 
@@ -111,6 +118,9 @@ export default function DiagPage() {
 
   const lastOriT = useRef(0);
   const frameDtMaxSinceOri = useRef(0);
+  // Same fusion the app uses, mirrored here so the CSV can show fused heading
+  // next to the raw and compass-driven ones. Created once, primes on first read.
+  const yawTracker = useRef(makeYawOffsetTracker());
 
   // rate / jank counters
   const oriStamps = useRef<number[]>([]);
@@ -145,6 +155,8 @@ export default function DiagPage() {
 
     let viewAlt: number | null = null;
     let viewAz: number | null = null;
+    let viewAzCompass: number | null = null;
+    let viewAzFused: number | null = null;
     let upX: number | null = null;
     let upY: number | null = null;
     let upZ: number | null = null;
@@ -154,6 +166,23 @@ export default function DiagPage() {
         const h = vectorToHorizontal(v);
         viewAlt = h.alt;
         viewAz = h.az;
+      }
+      // True-north yaw (same CCW sense as e.alpha) when the compass is present.
+      const alphaTrue = heading != null ? wrap360(360 - heading) : null;
+      // OLD production source: drive yaw straight off the compass. This is the
+      // path that staircases/freezes — expect this column to step with
+      // compassHeading and flat-line when the heading freezes.
+      if (alphaTrue != null && beta != null && gamma != null) {
+        const vc = deviceToVector(alphaTrue, beta, gamma);
+        if (vc) viewAzCompass = vectorToHorizontal(vc).az;
+      }
+      // NEW fused source: smooth e.alpha plus a slowly compass-locked offset.
+      // Always push (alphaTrue may be null on a frozen/absent reading; the
+      // tracker just holds the offset), so this mirrors the app exactly.
+      if (alpha != null && beta != null && gamma != null) {
+        const offset = yawTracker.current.push(alpha, alphaTrue);
+        const vf = deviceToVector(wrap360(alpha + offset), beta, gamma);
+        if (vf) viewAzFused = vectorToHorizontal(vf).az;
       }
       const u = deviceUpVector(alpha, beta, gamma);
       if (u) {
@@ -191,6 +220,8 @@ export default function DiagPage() {
         screenAngle,
         viewAlt,
         viewAz,
+        viewAzCompass,
+        viewAzFused,
         upX,
         upY,
         upZ,
@@ -269,6 +300,8 @@ export default function DiagPage() {
           accuracy: last?.compassAccuracy ?? null,
           viewAlt: last?.viewAlt ?? null,
           viewAz: last?.viewAz ?? null,
+          viewAzCompass: last?.viewAzCompass ?? null,
+          viewAzFused: last?.viewAzFused ?? null,
           screenAngle: last?.screenAngle ?? 0,
         });
       }
@@ -356,7 +389,7 @@ export default function DiagPage() {
       "t_ms","label","alpha","beta","gamma","absolute","compassHeading",
       "compassAccuracy","rotA","rotB","rotG","accX","accY","accZ",
       "motionInterval","screenAngle","viewAlt","viewAz","upX","upY","upZ",
-      "oriDt","frameDtMax",
+      "oriDt","frameDtMax","viewAzCompass","viewAzFused",
     ];
     const line = (r: Row) =>
       [
@@ -364,6 +397,7 @@ export default function DiagPage() {
         r.compassHeading, r.compassAccuracy, r.rotA, r.rotB, r.rotG,
         r.accX, r.accY, r.accZ, r.motionInterval, r.screenAngle,
         r.viewAlt, r.viewAz, r.upX, r.upY, r.upZ, r.oriDt, r.frameDtMax,
+        r.viewAzCompass, r.viewAzFused,
       ]
         .map((v) =>
           v == null ? "" : typeof v === "number" ? +v.toFixed(3) : v
@@ -487,6 +521,7 @@ export default function DiagPage() {
         <div style={cell}>α {f1(live.alpha)}  β {f1(live.beta)}  γ {f1(live.gamma)}  (abs: {live.absolute ? "y" : "n"})</div>
         <div style={cell}>compass {f1(live.heading)}°  ±{f1(live.accuracy)}°  screen {live.screenAngle}°</div>
         <div style={cell}>view alt {f1(live.viewAlt)}  az {f1(live.viewAz)}</div>
+        <div style={cell}>az raw {f1(live.viewAz)} · compass {f1(live.viewAzCompass)} · fused <span style={{ color: "#5dff9b" }}>{f1(live.viewAzFused)}</span></div>
         <div style={cell}>jank (frames &gt;20ms): <span style={{ color: live.jankPct > 5 ? "#ff5a4d" : "#5dff9b" }}>{live.jankPct.toFixed(1)}%</span></div>
         <div style={cell}>rows {live.rows}  ·  {live.durS.toFixed(0)}s  ·  rec: <span style={{ color: recording ? "#5dff9b" : "#ff5a4d" }}>{recording ? "ON" : "off"}</span>{label ? `  ·  label: ${label}` : ""}</div>
       </div>
