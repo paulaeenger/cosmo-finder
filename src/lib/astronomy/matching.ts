@@ -84,7 +84,7 @@ export function computeStaticSky(
 ): SkyObject[] {
   const result: SkyObject[] = [];
   // Always include named objects, even when below the horizon.
-  // The `belowHorizon` flag lets consumers (search, TonightHighlights) decide
+  // The `belowHorizon` flag lets consumers (search, TonightPicks) decide
   // whether to show or filter.
   const pushAlways = (raw: Omit<SkyObject, "alt" | "az" | "belowHorizon">) => {
     const h = equatorialToHorizontal(
@@ -289,6 +289,71 @@ export function rankTonight(sky: SkyObject[], limit = 8): SkyObject[] {
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
     .map(({ o }) => o);
+}
+/**
+ * Curated "Tonight's picks" — the hero of the app. Stricter than rankTonight:
+ * only the few things a casual person can actually find AND enjoy right now,
+ * capped small so it stays an edit and never becomes a dump.
+ *
+ * Qualification (eligible to be a pick at all):
+ *   - above 12° altitude (below that is haze / behind houses & trees)
+ *   - stars & deep-sky must be mag <= 4 (naked-eye in a suburban sky)
+ *   - planets, the Moon, and LIT satellites always qualify (bright, high-interest)
+ *   - the Sun, constellations, below-horizon, and unlit satellites never qualify
+ *
+ * Ordering — category interest leads, then how high it sits, then brightness:
+ *   the Moon, the bright planets, and a visible ISS pass are the "walk outside
+ *   right now" wins, so they rank above catalog stars even when a star is
+ *   technically brighter. Altitude is the secondary lever (well-placed beats
+ *   low); brightness is only a gentle, capped tiebreak.
+ */
+export function rankPicks(sky: SkyObject[], cap = 4): SkyObject[] {
+  const categoryWeight = (o: SkyObject): number => {
+    if (o.kind === "satellite") return o.satellite?.lit ? 5 : -Infinity;
+    if (o.kind === "moon") return 4;
+    if (o.kind === "planet") return 3;
+    if (o.kind === "star") return 1.5;
+    if (o.kind === "deep-sky") return 1;
+    return -Infinity; // sun, constellation — never a pick
+  };
+  return [...sky]
+    .filter((o) => !o.belowHorizon && o.alt > 12)
+    .filter((o) => o.kind !== "sun" && o.kind !== "constellation")
+    .filter((o) => o.kind !== "satellite" || o.satellite?.lit)
+    .filter((o) =>
+      o.kind === "star" || o.kind === "deep-sky" ? o.mag <= 4 : true
+    )
+    .map((o) => ({
+      o,
+      score:
+        categoryWeight(o) +
+        (o.alt / 90) * 2 +
+        Math.min(4, Math.max(0, -o.mag)) * 0.15,
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, cap)
+    .map(({ o }) => o);
+}
+/**
+ * Full-word 8-point compass direction from an absolute azimuth (0 = north).
+ * Used by the curated guidance line ("Southwest · ~31° up"). Spelled out
+ * because casual users read "Southwest" more easily than "SW". This reads the
+ * object's OWN absolute azimuth (computed by astronomy-engine), never the
+ * phone's heading — so the guidance is correct even when the compass isn't.
+ */
+export function cardinalName(az: number): string {
+  const names = [
+    "North",
+    "Northeast",
+    "East",
+    "Southeast",
+    "South",
+    "Southwest",
+    "West",
+    "Northwest",
+  ];
+  const idx = Math.round((((az % 360) + 360) % 360) / 45) % 8;
+  return names[idx];
 }
 export function searchSky(sky: SkyObject[], query: string): SkyObject[] {
   const q = query.trim().toLowerCase();

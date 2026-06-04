@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import { MapPin, Compass, Clock, Activity } from "lucide-react";
+import { MapPin, Compass, Clock, Telescope, ChevronDown } from "lucide-react";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useDeviceOrientation } from "@/hooks/useDeviceOrientation";
 import { useFusedOrientation } from "@/hooks/useFusedOrientation";
@@ -35,7 +35,7 @@ import { SkyCompass } from "@/components/SkyCompass";
 import { SkyView } from "@/components/SkyView";
 import { ObjectCard } from "@/components/ObjectCard";
 import { SearchPanel } from "@/components/SearchPanel";
-import { TonightHighlights } from "@/components/TonightHighlights";
+import { TonightPicks } from "@/components/TonightPicks";
 import { ObjectDetail } from "@/components/ObjectDetail";
 import { SatelliteAlert } from "@/components/SatelliteAlert";
 import { FilterBar } from "@/components/FilterBar";
@@ -123,6 +123,10 @@ export default function HomePage() {
   }, [openCategory, equipmentFilteredSky]);
   const [detail, setDetail] = useState<SkyObject | null>(null);
   const [viewMode, setViewMode] = useState<"panoramic" | "instrument">("panoramic");
+  // AR mode is demoted behind a collapsible "beta" section — the heading-
+  // dependent UI (live sky view, compass, pointing readout) is quarantined here
+  // so an untrustworthy compass can't quietly break the main experience.
+  const [arOpen, setArOpen] = useState(false);
   // Live vs Manual: in manual the gyroscope is paused and touch drives the view.
   const [skyMode, setSkyMode] = useState<"live" | "manual">("live");
   // The user-controlled view in manual mode. Null in live mode. Seeded from the
@@ -143,13 +147,13 @@ export default function HomePage() {
   const targetVecRef = useRef<{ x: number; y: number; z: number } | null>(null);
   // Heading (azimuth) stabilizer: rejects the near-vertical "azimuth slides
   // while still" drift by gating azimuth correction on gyro ENERGY (sign-free
-  // |rotationRate|). Toggleable so it can be compared on-device against the
-  // current path; it only touches azimuth, never altitude or roll.
-  const [stabilizeHeading, setStabilizeHeading] = useState(true);
+  // |rotationRate|). Hard-wired on — it only touches azimuth, never altitude
+  // or roll. (Was a debug toggle; locked to the better-performing path.)
+  const stabilizeHeading = true;
   // Gyro+compass heading fusion: replaces the staircasing compass-driven yaw
   // with the smooth gyro-fused attitude (e.alpha) plus a slow compass-locked
-  // offset. On by default; toggleable for on-device A/B against the old path.
-  const [useFusion, setUseFusion] = useState(true);
+  // offset. Hard-wired on. (Was a debug toggle; locked to the fused path.)
+  const useFusion = true;
   const stabilizeOnRef = useRef(stabilizeHeading);
   const headingStabRef = useRef<HeadingStabilizer | null>(null);
   if (!headingStabRef.current) headingStabRef.current = createHeadingStabilizer();
@@ -367,6 +371,19 @@ export default function HomePage() {
     return sky.find((o) => o.name === tracked.name) ?? tracked;
   }, [tracked, sky]);
   const ready = position && granted;
+  // Compass anchoring status — drives the AR-mode sub-line. Doubles as the
+  // built-in on-device check (open AR mode, read whether it says "anchored"
+  // and the ± degrees) and the honest degradation cue for users. `absolute`
+  // is true only when a true-north source (webkitCompassHeading / absolute
+  // event) is present; without it the heading has no north anchor.
+  const arStatus = (() => {
+    const acc = orientation.compassAccuracy;
+    if (!orientation.absolute)
+      return { ok: false, label: "Compass not anchored — use the directions above" };
+    if (acc == null || acc < 0)
+      return { ok: true, label: "Compass anchored · accuracy unknown" };
+    return { ok: true, label: `Compass anchored · ±${Math.round(acc)}°` };
+  })();
   // Compass calibration coach. iOS reports webkitCompassAccuracy in degrees
   // (-1 = invalid). When it indicates drift we surface the figure-8 coach once
   // per session; the user can also open it manually anytime from the header.
@@ -398,49 +415,9 @@ export default function HomePage() {
           />
         ) : (
           <>
-            <Header position={position} now={now} pointing={pointing} />
-            <button
-              onClick={() => setShowCalibration(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-2 text-[10px] uppercase tracking-[0.25em] text-white/45 font-mono transition hover:text-white/70"
-            >
-              <Compass className="h-3 w-3" />
-              {orientation.compassAccuracy != null &&
-              (orientation.compassAccuracy < 0 || orientation.compassAccuracy > 25)
-                ? "Compass may be off · calibrate"
-                : "Calibrate compass"}
-            </button>
-            {/* Sensor diagnostic instrument. Full navigation (not client-side)
-                so a stale service worker can't trap you on the cached shell. */}
-            <a
-              href="/diag"
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-400/20 bg-amber-400/[0.04] px-4 py-2 text-[10px] uppercase tracking-[0.25em] text-amber-300/70 font-mono transition hover:text-amber-200"
-            >
-              <Activity className="h-3 w-3" />
-              Sensor diagnostics
-            </a>
-            <button
-              onClick={() => setStabilizeHeading((v) => !v)}
-              className={`flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2 text-[10px] uppercase tracking-[0.25em] font-mono transition ${
-                stabilizeHeading
-                  ? "border-emerald-400/25 bg-emerald-400/[0.05] text-emerald-300/80 hover:text-emerald-200"
-                  : "border-white/10 bg-white/[0.02] text-white/45 hover:text-white/70"
-              }`}
-            >
-              <Compass className="h-3 w-3" />
-              Heading stabilizer: {stabilizeHeading ? "on" : "off"}
-            </button>
-            <button
-              onClick={() => setUseFusion((v) => !v)}
-              className={`flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2 text-[10px] uppercase tracking-[0.25em] font-mono transition ${
-                useFusion
-                  ? "border-emerald-400/25 bg-emerald-400/[0.05] text-emerald-300/80 hover:text-emerald-200"
-                  : "border-white/10 bg-white/[0.02] text-white/45 hover:text-white/70"
-              }`}
-            >
-              <Compass className="h-3 w-3" />
-              Gyro fusion: {useFusion ? "on" : "off"}
-            </button>
+            <Header position={position} now={now} />
             <OfflineIndicator />
+            <TonightPicks sky={filteredSky} onPick={(o) => setDetail(o)} />
             {skyConditions && (
               <SkyConditionsBanner
                 conditions={skyConditions.conditions}
@@ -483,50 +460,100 @@ export default function HomePage() {
               onReset={() => setCalibration(IDENTITY_CALIBRATION)}
               calibrated={calibration !== IDENTITY_CALIBRATION}
             />
-            <ViewToggle mode={viewMode} onChange={setViewMode} />
-            {viewMode === "panoramic" && (
-              <SkyModeToggle mode={skyMode} onChange={setSkyMode} />
-            )}
-            {viewMode === "panoramic" && position ? (
-              <div className="relative">
-                <SkyView
-                  view={skyViewDir}
-                  viewUp={viewUp}
-                  sky={filteredSky}
-                  trackedTarget={liveTracked}
-                  onObjectTap={(o) => setDetail(o)}
-                  observerLat={position.lat}
-                  observerLon={position.lon}
-                  now={now}
-                  showConstellations={filters.constellations}
-                  mode={skyMode}
-                  onPan={handlePan}
-                />
-                {tracked && liveTracked && (
-                  <div className="pointer-events-none absolute inset-x-3 top-3 z-20">
-                    <div className="pointer-events-auto">
-                      <TrackingGuide
-                        target={liveTracked}
-                        pointing={pointing}
-                        onStop={() => setTracked(null)}
-                      />
-                    </div>
+            {/* AR mode (beta): every heading-dependent surface lives in here,
+                collapsed by default. The sub-line is both the on-device compass
+                check and the honest degradation cue. */}
+            <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02]">
+              <button
+                onClick={() => setArOpen((v) => !v)}
+                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+              >
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Telescope className="h-4 w-4 text-white/70" />
+                    <span className="text-sm text-white">AR mode</span>
+                    <span className="rounded-full border border-amber-400/20 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.2em] text-amber-300/70 font-mono">
+                      beta
+                    </span>
                   </div>
-                )}
-              </div>
-            ) : (
-              <SkyCompass
-                pointing={pointing}
-                sky={filteredSky}
-                trackedTarget={liveTracked}
-                onObjectTap={(o) => setDetail(o)}
-              />
-            )}
-            <ObjectCard match={match} onOpenDetail={(o) => setDetail(o)} />
+                  <p
+                    className={`mt-1 text-[11px] font-mono ${
+                      arStatus.ok ? "text-emerald-300/70" : "text-white/40"
+                    }`}
+                  >
+                    {arStatus.label}
+                  </p>
+                </div>
+                <ChevronDown
+                  className={`h-4 w-4 shrink-0 text-white/40 transition ${
+                    arOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              {arOpen && (
+                <div className="space-y-4 border-t border-white/10 px-4 py-4">
+                  {/* Live pointing readout — moved out of the persistent header
+                      so this heading-dependent stat stays quarantined here. */}
+                  <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
+                    <Stat
+                      icon={<Compass className="h-3 w-3" />}
+                      value={
+                        pointing
+                          ? `${cardinal(pointing.az)} ${pointing.az.toFixed(0)}°`
+                          : "—"
+                      }
+                    />
+                    <Stat
+                      icon={<Clock className="h-3 w-3" />}
+                      value={pointing ? `alt ${pointing.alt.toFixed(0)}°` : "—"}
+                    />
+                  </div>
+                  <ViewToggle mode={viewMode} onChange={setViewMode} />
+                  {viewMode === "panoramic" && (
+                    <SkyModeToggle mode={skyMode} onChange={setSkyMode} />
+                  )}
+                  {viewMode === "panoramic" && position ? (
+                    <div className="relative">
+                      <SkyView
+                        view={skyViewDir}
+                        viewUp={viewUp}
+                        sky={filteredSky}
+                        trackedTarget={liveTracked}
+                        onObjectTap={(o) => setDetail(o)}
+                        observerLat={position.lat}
+                        observerLon={position.lon}
+                        now={now}
+                        showConstellations={filters.constellations}
+                        mode={skyMode}
+                        onPan={handlePan}
+                      />
+                      {tracked && liveTracked && (
+                        <div className="pointer-events-none absolute inset-x-3 top-3 z-20">
+                          <div className="pointer-events-auto">
+                            <TrackingGuide
+                              target={liveTracked}
+                              pointing={pointing}
+                              onStop={() => setTracked(null)}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <SkyCompass
+                      pointing={pointing}
+                      sky={filteredSky}
+                      trackedTarget={liveTracked}
+                      onObjectTap={(o) => setDetail(o)}
+                    />
+                  )}
+                  <ObjectCard match={match} onOpenDetail={(o) => setDetail(o)} />
+                </div>
+              )}
+            </section>
             {/* Search uses unfiltered sky — if you type "Saturn" you should
                 find it even when the planets filter is off. */}
             <SearchPanel sky={sky} onPick={(o) => setDetail(o)} />
-            <TonightHighlights sky={filteredSky} onPick={(o) => setDetail(o)} />
             <Footer satCount={satellites.length} />
           </>
         )}
@@ -578,11 +605,9 @@ export default function HomePage() {
 function Header({
   position,
   now,
-  pointing,
 }: {
   position: { lat: number; lon: number } | null;
   now: Date;
-  pointing: { alt: number; az: number } | null;
 }) {
   return (
     <section className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3">
@@ -590,19 +615,13 @@ function Header({
         <span>Cosmos Finder</span>
         <span>{now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
       </div>
-      <div className="mt-2 grid grid-cols-3 gap-2 text-[11px] font-mono">
-        <Stat
-          icon={<MapPin className="h-3 w-3" />}
-          value={position ? `${position.lat.toFixed(2)}, ${position.lon.toFixed(2)}` : "—"}
-        />
-        <Stat
-          icon={<Compass className="h-3 w-3" />}
-          value={pointing ? `${cardinal(pointing.az)} ${pointing.az.toFixed(0)}°` : "—"}
-        />
-        <Stat
-          icon={<Clock className="h-3 w-3" />}
-          value={pointing ? `alt ${pointing.alt.toFixed(0)}°` : "—"}
-        />
+      <div className="mt-2 flex items-center gap-1.5 text-[11px] font-mono text-white/70">
+        <span className="text-gold-400">
+          <MapPin className="h-3 w-3" />
+        </span>
+        <span>
+          {position ? `${position.lat.toFixed(2)}, ${position.lon.toFixed(2)}` : "—"}
+        </span>
       </div>
     </section>
   );
